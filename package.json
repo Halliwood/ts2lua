@@ -1,0 +1,32 @@
+{
+  "name": "ts2lua",
+  "version": "1.0.0",
+  "description": "Change typescript to lua.",
+  "main": "index.js",
+  "scripts": {
+    "test": "tsc && node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Halliwood/ts2lua.git"
+  },
+  "keywords": [
+    "typescript",
+    "lua"
+  ],
+  "author": "Halliwood",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Halliwood/ts2lua/issues"
+  },
+  "homepage": "https://github.com/Halliwood/ts2lua#readme",
+  "dependencies": {
+    "@types/string-format": "^2.0.0",
+    "@typescript-eslint/typescript-estree": "^1.13.0",
+    "string-format": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^12.6.8",
+    "@types/typescript": "^2.0.0"
+  }
+}

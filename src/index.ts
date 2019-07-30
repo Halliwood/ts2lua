@@ -1,0 +1,48 @@
+import * as fs from 'fs';
+import path = require('path');
+import sf = require('string-format');
+import util = require('util')
+import parser = require('@typescript-eslint/typescript-estree');
+
+const args = process.argv.splice(2);
+const inputFolder = 'G:\\ly\\trunk\\TsScripts\\Diff\\view';
+const outputFolder = 'test\\out';
+
+readDir(inputFolder);
+
+async function readDir(dirPath: string) {
+  let files = fs.readdirSync(dirPath);
+  for(let i = 0, len = files.length; i < len; i++) {
+    let filename = files[i];
+    let filePath = path.join(dirPath, filename);
+    let fileStat = fs.statSync(filePath);
+    if(fileStat.isFile()) {
+      let fileExt = path.extname(filename).toLowerCase();
+      if('.ts' == fileExt) {
+        await parseTs(filePath);
+      }
+    } else {
+      await readDir(filePath);
+    }
+  }
+}
+
+async function parseTs(filePath: string) {
+  console.log(sf('parsing: {0}', filePath));
+  const fileContent = fs.readFileSync(filePath, 'utf-8');
+  const parsed = await parser.parse(fileContent);
+  // const parsed = await parser.parseSource('let a = 123, b =456;');
+  let str = util.inspect(parsed, true);
+  fs.writeFileSync(sf('{}\\tt.txt', outputFolder), str);
+
+  // let luaContent = '';
+  // for(let i = 0, len = parsed.imports.length; i < len; i++) {
+  //   let oneImport = parsed.imports[i];
+  //   let luaImport = '';
+  // }
+  
+}
+
+
+// or a filepath
+// const parsed = await parser.parseFile('/user/myfile.ts', 'workspace root');
