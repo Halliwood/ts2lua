@@ -3,6 +3,7 @@ import path = require('path');
 import sf = require('string-format');
 import util = require('util')
 import parser = require('@typescript-eslint/typescript-estree');
+import * as lm from './gen/LuaMaker';
 
 const args = process.argv.splice(2);
 const inputFolder = 'G:\\ly\\trunk\\TsScripts\\Diff\\view';
@@ -19,7 +20,7 @@ async function readDir(dirPath: string) {
     if(fileStat.isFile()) {
       let fileExt = path.extname(filename).toLowerCase();
       if('.ts' == fileExt) {
-        await parseTs(filePath);
+        await translate(filePath);
       }
     } else {
       await readDir(filePath);
@@ -27,22 +28,15 @@ async function readDir(dirPath: string) {
   }
 }
 
-async function parseTs(filePath: string) {
+async function translate(filePath: string) {
   console.log(sf('parsing: {0}', filePath));
   const fileContent = fs.readFileSync(filePath, 'utf-8');
   const parsed = await parser.parse(fileContent);
   // const parsed = await parser.parseSource('let a = 123, b =456;');
-  let str = util.inspect(parsed, true);
+  let str = util.inspect(parsed, true, 10);
   fs.writeFileSync(sf('{}\\tt.txt', outputFolder), str);
 
-  // let luaContent = '';
-  // for(let i = 0, len = parsed.imports.length; i < len; i++) {
-  //   let oneImport = parsed.imports[i];
-  //   let luaImport = '';
-  // }
-  
+  let luaContent = lm.processProgram(parsed);
+  let luaFilePath = filePath.replace(inputFolder, outputFolder).replace(/\.ts$/, '.lua');
+  fs.writeFileSync(luaFilePath, luaContent);
 }
-
-
-// or a filepath
-// const parsed = await parser.parseFile('/user/myfile.ts', 'workspace root');

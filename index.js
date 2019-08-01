@@ -47,6 +47,7 @@ var path = require("path");
 var sf = require("string-format");
 var util = require("util");
 var parser = require("@typescript-eslint/typescript-estree");
+var lm = __importStar(require("./gen/LuaMaker"));
 var args = process.argv.splice(2);
 var inputFolder = 'G:\\ly\\trunk\\TsScripts\\Diff\\view';
 var outputFolder = 'test\\out';
@@ -68,7 +69,7 @@ function readDir(dirPath) {
                     if (!fileStat.isFile()) return [3 /*break*/, 4];
                     fileExt = path.extname(filename).toLowerCase();
                     if (!('.ts' == fileExt)) return [3 /*break*/, 3];
-                    return [4 /*yield*/, parseTs(filePath)];
+                    return [4 /*yield*/, translate(filePath)];
                 case 2:
                     _a.sent();
                     _a.label = 3;
@@ -85,9 +86,9 @@ function readDir(dirPath) {
         });
     });
 }
-function parseTs(filePath) {
+function translate(filePath) {
     return __awaiter(this, void 0, void 0, function () {
-        var fileContent, parsed, str;
+        var fileContent, parsed, str, luaContent, luaFilePath;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -96,12 +97,13 @@ function parseTs(filePath) {
                     return [4 /*yield*/, parser.parse(fileContent)];
                 case 1:
                     parsed = _a.sent();
-                    str = util.inspect(parsed, true);
+                    str = util.inspect(parsed, true, 10);
                     fs.writeFileSync(sf('{}\\tt.txt', outputFolder), str);
+                    luaContent = lm.processProgram(parsed);
+                    luaFilePath = filePath.replace(inputFolder, outputFolder).replace(/\.ts$/, '.lua');
+                    fs.writeFileSync(luaFilePath, luaContent);
                     return [2 /*return*/];
             }
         });
     });
 }
-// or a filepath
-// const parsed = await parser.parseFile('/user/myfile.ts', 'workspace root');
