@@ -34,7 +34,7 @@ async function translate(filePath: string) {
   const fileContent = fs.readFileSync(filePath, 'utf-8');
   const parsed = await parser.parse(fileContent);
   // const parsed = await parser.parseSource('let a = 123, b =456;');
-  let str = util.inspect(parsed, true, 10);
+  let str = util.inspect(parsed, true, 100);
   fs.writeFileSync(filePath.replace(inputFolder, outputFolder).replace(/\.ts$/, '.txt'), str);
 
   let luaContent = lm.toLua(parsed);

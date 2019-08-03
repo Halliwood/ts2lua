@@ -121,6 +121,7 @@ function toLua(ast) {
     if (allClasses.length > 0) {
         content = 'require("class")\n' + content;
     }
+    content = content.replace(/console[\.|:]log/g, 'print');
     return content;
 }
 exports.toLua = toLua;
@@ -374,7 +375,12 @@ function codeFromAssignmentExpression(ast) {
 }
 exports.codeFromAssignmentExpression = codeFromAssignmentExpression;
 function codeFromAssignmentPattern(ast) {
-    return codeFromAST(ast.left) + ' = ' + codeFromAST(ast.right);
+    var str = codeFromAST(ast.left);
+    var parent = ast.__parent;
+    if (!parent || parent.type != typescript_estree_1.AST_NODE_TYPES.FunctionExpression) {
+        str += ' = ' + codeFromAST(ast.right);
+    }
+    return str;
 }
 exports.codeFromAssignmentPattern = codeFromAssignmentPattern;
 function codeFromAwaitExpression(ast) {
@@ -387,13 +393,21 @@ function codeFromBigIntLiteral(ast) {
 }
 exports.codeFromBigIntLiteral = codeFromBigIntLiteral;
 function codeFromBinaryExpression(ast) {
-    return codeFromAST(ast.left) + ast.operator + codeFromAST(ast.right);
+    var optStr = ast.operator;
+    // TODO: Take care of string combination
+    var left = codeFromAST(ast.left);
+    var right = codeFromAST(ast.right);
+    if (ast.operator == '+' && (ast.left.__isString || ast.right.__isString)) {
+        optStr = '..';
+        ast.left.__isString = true;
+    }
+    return left + optStr + right;
 }
 exports.codeFromBinaryExpression = codeFromBinaryExpression;
 function codeFromBlockStatement(ast) {
     var str = '';
     for (var i = 0, len = ast.body.length; i < len; i++) {
-        if (!str) {
+        if (i > 0) {
             str += '\n';
         }
         str += codeFromAST(ast.body[i]);
@@ -407,6 +421,7 @@ function codeFromBreakStatement(ast) {
 }
 exports.codeFromBreakStatement = codeFromBreakStatement;
 function codeFromCallExpression(ast) {
+    ast.callee.__parent = ast;
     var str = codeFromAST(ast.callee);
     str += '(';
     for (var i = 0, len = ast.arguments.length; i < len; i++) {
@@ -512,7 +527,7 @@ function codeFromConditionalExpression(ast) {
         str += 'else \n';
         str += codeFromAST(ast.alternate) + '\n';
     }
-    str += 'end\n';
+    str += 'end';
     return str;
 }
 exports.codeFromConditionalExpression = codeFromConditionalExpression;
@@ -584,10 +599,12 @@ function codeFromForStatement(ast) {
         str += codeFromAST(ast.init) + '\n';
     }
     str += 'repeat\n';
-    str += codeFromAST(ast.body) + '\n';
+    var repeatBodyStr = codeFromAST(ast.body);
     if (ast.update) {
-        str += codeFromAST(ast.update) + '\n';
+        repeatBodyStr += '\n';
+        repeatBodyStr += codeFromAST(ast.update);
     }
+    str += indent(repeatBodyStr) + '\n';
     str += 'until ';
     if (ast.test) {
         str += 'not(' + codeFromAST(ast.test) + ')';
@@ -595,7 +612,6 @@ function codeFromForStatement(ast) {
     else {
         str += 'false';
     }
-    str += '\n';
     return str;
 }
 exports.codeFromForStatement = codeFromForStatement;
@@ -629,17 +645,32 @@ function codeFromFunctionExpressionInternal(funcName, ast) {
     else {
         str = 'function(';
     }
+    var defaultParamsStr = '';
     if (ast.params) {
         for (var i = 0, len = ast.params.length; i < len; i++) {
             if (i > 0) {
                 str += ', ';
             }
-            str += codeFromAST(ast.params[i]);
+            var oneParam = ast.params[i];
+            oneParam.__parent = ast;
+            str += codeFromAST(oneParam);
+            if (oneParam.type == typescript_estree_1.AST_NODE_TYPES.AssignmentPattern) {
+                var paramIdStr = codeFromAST(oneParam.left);
+                defaultParamsStr += 'if ' + paramIdStr + ' == nil then\n';
+                defaultParamsStr += indent(paramIdStr + '=' + codeFromAST(oneParam.right)) + '\n';
+                defaultParamsStr += 'end\n';
+            }
         }
     }
     str += ')\n';
     if (ast.body) {
-        str += codeFromAST(ast.body) + '\n';
+        blockDeep++;
+        var bodyStr = codeFromAST(ast.body);
+        if (defaultParamsStr) {
+            bodyStr = defaultParamsStr + bodyStr;
+        }
+        str += indent(bodyStr) + '\n';
+        blockDeep--;
     }
     console.assert(!ast.generator, 'Not support generator yet!');
     console.assert(!ast.async, 'Not support async yet!');
@@ -655,10 +686,10 @@ function codeFromIdentifier(ast) {
 exports.codeFromIdentifier = codeFromIdentifier;
 function codeFromIfStatement(ast) {
     var str = 'if ' + codeFromAST(ast.test) + ' then\n';
-    str += codeFromAST(ast.consequent) + '\n';
+    str += indent(codeFromAST(ast.consequent) + '\n');
     if (ast.alternate) {
         str += 'else\n';
-        str += codeFromAST(ast.alternate) + '\n';
+        str += indent(codeFromAST(ast.alternate) + '\n');
     }
     str += 'end\n';
     return str;
@@ -698,6 +729,9 @@ function codeFromLiteral(ast) {
     if (ast.regex) {
         console.assert(false, 'Not support regex yet!');
     }
+    if (typeof (ast.value) == 'string') {
+        ast.__isString = true;
+    }
     return ast.raw;
 }
 exports.codeFromLiteral = codeFromLiteral;
@@ -723,7 +757,15 @@ function codeFromMemberExpression(ast) {
         str += '[' + codeFromAST(ast.property) + ']';
     }
     else {
-        str += '.' + codeFromAST(ast.property);
+        // TODO: do something with static members
+        var parent_1 = ast.__parent;
+        if (parent_1 && parent_1.type == typescript_estree_1.AST_NODE_TYPES.CallExpression) {
+            str += ':';
+        }
+        else {
+            str += '.';
+        }
+        str += codeFromAST(ast.property);
     }
     return str;
 }
@@ -779,6 +821,11 @@ exports.codeFromObjectPattern = codeFromObjectPattern;
 function codeFromProgram(ast) {
     var str = '';
     for (var i = 0, len = ast.body.length; i < len; i++) {
+        if (i > 0) {
+            str += '\n';
+            str += '--分割线\n';
+            str += '\n';
+        }
         var stm = ast.body[i];
         str += codeFromAST(stm);
     }
@@ -795,7 +842,7 @@ function codeFromRestElement(ast) {
 }
 exports.codeFromRestElement = codeFromRestElement;
 function codeFromReturnStatement(ast) {
-    return 'return ' + codeFromAST(ast.argument) + ';\n';
+    return 'return ' + codeFromAST(ast.argument);
 }
 exports.codeFromReturnStatement = codeFromReturnStatement;
 function codeFromSequenceExpression(ast) {
@@ -848,7 +895,7 @@ function codeFromSwitchStatement(ast) {
     str += 'casef = switch["default"]\n';
     str += 'end\n';
     str += 'casef()\n';
-    str += 'end\n';
+    str += 'end';
     return str;
 }
 exports.codeFromSwitchStatement = codeFromSwitchStatement;
@@ -872,7 +919,7 @@ function codeFromThisExpression(ast) {
 }
 exports.codeFromThisExpression = codeFromThisExpression;
 function codeFromThrowStatement(ast) {
-    return 'error(' + codeFromAST(ast.argument) + ')\n';
+    return 'error(' + codeFromAST(ast.argument) + ')';
 }
 exports.codeFromThrowStatement = codeFromThrowStatement;
 function codeFromTryStatement(ast) {
@@ -908,17 +955,17 @@ function codeFromUnaryExpression(ast) {
 }
 exports.codeFromUnaryExpression = codeFromUnaryExpression;
 function codeFromUpdateExpression(ast) {
-    console.assert(false, 'Not support UpdateExpression yet');
-    var str = codeFromAST(ast.argument);
+    var astr = codeFromAST(ast.argument);
     if (calPriority(ast.argument) >= calPriority(ast)) {
-        str = '(' + str + ')';
+        astr = '(' + astr + ')';
     }
-    if (ast.prefix) {
-        str = ast.operator + str;
-    }
-    else {
-        str = str + ast.operator;
-    }
+    // if (ast.prefix) {
+    //   // TODO: Consider if the value is right when used as Assignment/Property
+    //   str = ast.operator + str;
+    // } else {
+    //   str = str + ast.operator;
+    // }
+    var str = astr + '=' + astr + ast.operator.substring(0, 1) + '1';
     return str;
 }
 exports.codeFromUpdateExpression = codeFromUpdateExpression;
@@ -927,7 +974,10 @@ function codeFromVariableDeclaration(ast) {
     var str = '';
     for (var i = 0, len = ast.declarations.length; i < len; i++) {
         // TODO: no local in for statement
-        str += 'local ' + codeFromVariableDeclarator(ast.declarations[i]) + '\n';
+        if (i > 0) {
+            str += '\n';
+        }
+        str += 'local ' + codeFromVariableDeclarator(ast.declarations[i]);
     }
     return str;
 }
@@ -948,7 +998,7 @@ function codeFromWhileStatement(ast) {
     str += 'do\n';
     var bodyCode = codeFromAST(ast.body);
     str += bodyCode + '\n';
-    str += 'end\n';
+    str += 'end';
     return str;
 }
 exports.codeFromWhileStatement = codeFromWhileStatement;
@@ -969,6 +1019,25 @@ function codeFromTSEnumDeclaration(ast) {
     return '';
 }
 exports.codeFromTSEnumDeclaration = codeFromTSEnumDeclaration;
+function indent(str) {
+    var indentStr = '  ';
+    // for(let i = 0; i < blockDeep; i++) {
+    //   indentStr += '  ';
+    // }
+    var endWithNewLine = str.substr(str.length - 1) == '\n';
+    var lines = str.split(/\n/);
+    var newStr = '';
+    for (var i = 0, len = lines.length; i < len; i++) {
+        if (i > 0) {
+            newStr += '\n';
+        }
+        newStr += indentStr + lines[i];
+    }
+    if (endWithNewLine) {
+        newStr += '\n';
+    }
+    return newStr;
+}
 function pintHit(ast) {
     console.warn('hit %s!', ast.type);
     console.log(util.inspect(ast, true, 4));

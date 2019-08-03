@@ -98,7 +98,7 @@ function translate(filePath) {
                     return [4 /*yield*/, parser.parse(fileContent)];
                 case 1:
                     parsed = _a.sent();
-                    str = util.inspect(parsed, true, 10);
+                    str = util.inspect(parsed, true, 100);
                     fs.writeFileSync(filePath.replace(inputFolder, outputFolder).replace(/\.ts$/, '.txt'), str);
                     luaContent = lm.toLua(parsed);
                     luaFilePath = filePath.replace(inputFolder, outputFolder).replace(/\.ts$/, '.lua');
