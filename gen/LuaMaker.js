@@ -2,586 +2,974 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var typescript_estree_1 = require("@typescript-eslint/typescript-estree");
 var sf = require("string-format");
-function processAST(ast, str) {
-    if (str === void 0) { str = ''; }
+var util = require("util");
+var blockDeep = 0;
+var allClasses = [];
+var classQueue = [];
+var noBraceTypes = [typescript_estree_1.AST_NODE_TYPES.MemberExpression, typescript_estree_1.AST_NODE_TYPES.ThisExpression, typescript_estree_1.AST_NODE_TYPES.Identifier];
+var pv = 0;
+var operatorPriorityMap = {};
+setPriority(['( … )'], pv++);
+setPriority(['… . …', '… [ … ]', 'new … ( … )', '… ( … )'], pv++);
+setPriority(['new …'], pv++);
+setPriority(['… ++', '… --'], pv++);
+setPriority(['! …', '~ …', '+ …', '- …', '++ …', '-- …', 'typeof …', 'void …', 'delete …', 'await …'], pv++);
+setPriority(['… ** …'], pv++);
+setPriority(['… * …', '… / …', '… % …'], pv++);
+setPriority(['… + …', '… - …'], pv++);
+setPriority(['… << …', '… >> …', '… >>> …'], pv++);
+setPriority(['… < …', '… <= …', '… > …', '… >= …', '… in …', '… instanceof …'], pv++);
+setPriority(['… == …', '… != …', '… === …', '… !== …'], pv++);
+setPriority(['… & …'], pv++);
+setPriority(['… ^ …'], pv++);
+setPriority(['… | …'], pv++);
+setPriority(['… && …'], pv++);
+setPriority(['… || …'], pv++);
+setPriority(['… ? … : …'], pv++);
+setPriority(['… = …', '… += …', '… -= …', '… *= …', '… /= …', '… %= …', '… <<= …', '… >>= …', '… >>>= …', '… &= …', '… ^= …', '… |= …'], pv++);
+setPriority(['yield …', 'yield* …'], pv++);
+setPriority(['...'], pv++);
+setPriority(['… , …'], pv++);
+function setPriority(keys, value) {
+    for (var i = 0, len = keys.length; i < len; i++) {
+        operatorPriorityMap[keys[i]] = value;
+    }
+}
+function getPriority(raw) {
+    var idx = operatorPriorityMap[raw];
+    if (idx < 0) {
+        idx = 999;
+        console.error('no prioritys: ' + raw);
+    }
+    return idx;
+}
+function calPriority(ast) {
+    if ('__calPriority' in ast) {
+        return ast.__calPriority;
+    }
     switch (ast.type) {
-        case typescript_estree_1.AST_NODE_TYPES.ArrayExpression:
-            str += processArrayExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ArrayPattern:
-            str += processArrayPattern(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ArrowFunctionExpression:
-            str += processArrowFunctionExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.AssignmentExpression:
-            str += processAssignmentExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.AssignmentPattern:
-            str += processAssignmentPattern(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.AwaitExpression:
-            str += processAwaitExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.BigIntLiteral:
-            str += processBigIntLiteral(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.BinaryExpression:
-            str += processBinaryExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.BlockStatement:
-            str += processBlockStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.BreakStatement:
-            str += processBreakStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.CallExpression:
-            str += processCallExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.CatchClause:
-            str += processCatchClause(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ClassBody:
-            str += processClassBody(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ClassDeclaration:
-            str += processClassDeclaration(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ClassExpression:
-            str += processClassExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ClassProperty:
-            str += processClassProperty(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ConditionalExpression:
-            str += processConditionalExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ContinueStatement:
-            str += processContinueStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.DebuggerStatement:
-            str += processDebuggerStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.Decorator:
-            str += processDecorator(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.DoWhileStatement:
-            str += processDoWhileStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.EmptyStatement:
-            str += processEmptyStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ExportAllDeclaration:
-            str += processExportAllDeclaration(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ExportDefaultDeclaration:
-            str += processExportDefaultDeclaration(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ExportNamedDeclaration:
-            str += processExportNamedDeclaration(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ExportSpecifier:
-            str += processExportSpecifier(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ExpressionStatement:
-            str += processExpressionStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ForInStatement:
-            str += processForInStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ForOfStatement:
-            str += processForOfStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ForStatement:
-            str += processForStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.FunctionDeclaration:
-            str += processFunctionDeclaration(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.FunctionExpression:
-            str += processFunctionExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.Identifier:
-            str += processIdentifier(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.IfStatement:
-            str += processIfStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.Import:
-            str += processImport(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ImportDeclaration:
-            str += processImportDeclaration(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ImportDefaultSpecifier:
-            str += processImportDefaultSpecifier(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ImportNamespaceSpecifier:
-            str += processImportNamespaceSpecifier(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ImportSpecifier:
-            str += processImportSpecifier(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.LabeledStatement:
-            str += processLabeledStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.Literal:
-            str += processLiteral(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.LogicalExpression:
-            str += processLogicalExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.MemberExpression:
-            str += processMemberExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.MetaProperty:
-            str += processMetaProperty(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.MethodDefinition:
-            str += processMethodDefinition(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.NewExpression:
-            str += processNewExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ObjectExpression:
-            str += processObjectExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ObjectPattern:
-            str += processObjectPattern(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.Program:
-            str += processProgram(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.Property:
-            str += processProperty(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.RestElement:
-            str += processRestElement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ReturnStatement:
-            str += processReturnStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.SequenceExpression:
-            str += processSequenceExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.SpreadElement:
-            str += processSpreadElement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.Super:
-            str += processSuper(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.SwitchCase:
-            str += processSwitchCase(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.SwitchStatement:
-            str += processSwitchStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.TaggedTemplateExpression:
-            str += processTaggedTemplateExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.TemplateElement:
-            str += processTemplateElement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.TemplateLiteral:
-            str += processTemplateLiteral(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ThisExpression:
-            str += processThisExpression(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.ThrowStatement:
-            str += processThrowStatement(ast, str);
-            break;
-        case typescript_estree_1.AST_NODE_TYPES.TryStatement:
-            str += processTryStatement(ast, str);
-            break;
         case typescript_estree_1.AST_NODE_TYPES.UnaryExpression:
-            str += processUnaryExpression(ast, str);
+            {
+                var ue = ast;
+                ast.__calPriority = getPriority(ue.prefix ? ue.operator + ' …' : '… ' + ue.operator);
+            }
             break;
         case typescript_estree_1.AST_NODE_TYPES.UpdateExpression:
-            str += processUpdateExpression(ast, str);
+            {
+                var ue = ast;
+                ast.__calPriority = getPriority(ue.prefix ? ue.operator + ' …' : '… ' + ue.operator);
+            }
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.BinaryExpression:
+            {
+                var be = ast;
+                ast.__calPriority = getPriority('… ' + be.operator + ' …');
+            }
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.AssignmentExpression:
+            {
+                var ae = ast;
+                ast.__calPriority = getPriority('… ' + ae.operator + ' …');
+            }
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.LogicalExpression:
+            {
+                var le = ast;
+                ast.__calPriority = getPriority('… ' + le.operator + ' …');
+            }
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.MemberExpression:
+            {
+                var me = ast;
+                ast.__calPriority = getPriority(me.computed ? '… [ … ]' : '… . …');
+            }
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ConditionalExpression:
+            {
+                ast.__calPriority = getPriority('… ? … : …');
+            }
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.CallExpression:
+            {
+                ast.__calPriority = getPriority('… ( … )');
+            }
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.NewExpression:
+            {
+                var ne = ast;
+                if (ne.arguments.length > 0) {
+                    ast.__calPriority = getPriority('new … ( … )');
+                }
+                else {
+                    ast.__calPriority = getPriority('new …');
+                }
+            }
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.SequenceExpression:
+            {
+                ast.__calPriority = getPriority('… , …');
+            }
+            break;
+    }
+    return ast.__calPriority;
+}
+function toLua(ast) {
+    blockDeep = 0;
+    allClasses.length = 0;
+    classQueue.length = 0;
+    var content = codeFromAST(ast);
+    if (allClasses.length > 0) {
+        content = 'require("class")\n' + content;
+    }
+    return content;
+}
+exports.toLua = toLua;
+function codeFromAST(ast) {
+    var str = '';
+    switch (ast.type) {
+        case typescript_estree_1.AST_NODE_TYPES.ArrayExpression:
+            str += codeFromArrayExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ArrayPattern:
+            str += codeFromArrayPattern(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ArrowFunctionExpression:
+            str += codeFromArrowFunctionExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.AssignmentExpression:
+            str += codeFromAssignmentExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.AssignmentPattern:
+            str += codeFromAssignmentPattern(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.AwaitExpression:
+            str += codeFromAwaitExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.BigIntLiteral:
+            str += codeFromBigIntLiteral(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.BinaryExpression:
+            str += codeFromBinaryExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.BlockStatement:
+            str += codeFromBlockStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.BreakStatement:
+            str += codeFromBreakStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.CallExpression:
+            str += codeFromCallExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.CatchClause:
+            str += codeFromCatchClause(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ClassBody:
+            str += codeFromClassBody(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ClassDeclaration:
+            str += codeFromClassDeclaration(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ClassExpression:
+            str += codeFromClassExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ClassProperty:
+            str += codeFromClassProperty(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ConditionalExpression:
+            str += codeFromConditionalExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ContinueStatement:
+            str += codeFromContinueStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.DebuggerStatement:
+            str += codeFromDebuggerStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.Decorator:
+            str += codeFromDecorator(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.DoWhileStatement:
+            str += codeFromDoWhileStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.EmptyStatement:
+            str += codeFromEmptyStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ExportAllDeclaration:
+            str += codeFromExportAllDeclaration(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ExportDefaultDeclaration:
+            str += codeFromExportDefaultDeclaration(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ExportNamedDeclaration:
+            str += codeFromExportNamedDeclaration(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ExportSpecifier:
+            str += codeFromExportSpecifier(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ExpressionStatement:
+            str += codeFromExpressionStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ForInStatement:
+            str += codeFromForInStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ForOfStatement:
+            str += codeFromForOfStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ForStatement:
+            str += codeFromForStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.FunctionDeclaration:
+            str += codeFromFunctionDeclaration(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.FunctionExpression:
+            str += codeFromFunctionExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.Identifier:
+            str += codeFromIdentifier(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.IfStatement:
+            str += codeFromIfStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.Import:
+            str += codeFromImport(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ImportDeclaration:
+            str += codeFromImportDeclaration(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ImportDefaultSpecifier:
+            str += codeFromImportDefaultSpecifier(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ImportNamespaceSpecifier:
+            str += codeFromImportNamespaceSpecifier(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ImportSpecifier:
+            str += codeFromImportSpecifier(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.LabeledStatement:
+            str += codeFromLabeledStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.Literal:
+            str += codeFromLiteral(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.LogicalExpression:
+            str += codeFromLogicalExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.MemberExpression:
+            str += codeFromMemberExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.MetaProperty:
+            str += codeFromMetaProperty(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.MethodDefinition:
+            str += codeFromMethodDefinition(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.NewExpression:
+            str += codeFromNewExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ObjectExpression:
+            str += codeFromObjectExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ObjectPattern:
+            str += codeFromObjectPattern(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.Program:
+            str += codeFromProgram(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.Property:
+            str += codeFromProperty(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.RestElement:
+            str += codeFromRestElement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ReturnStatement:
+            str += codeFromReturnStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.SequenceExpression:
+            str += codeFromSequenceExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.SpreadElement:
+            str += codeFromSpreadElement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.Super:
+            str += codeFromSuper(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.SwitchCase:
+            str += codeFromSwitchCase(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.SwitchStatement:
+            str += codeFromSwitchStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.TaggedTemplateExpression:
+            str += codeFromTaggedTemplateExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.TemplateElement:
+            str += codeFromTemplateElement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.TemplateLiteral:
+            str += codeFromTemplateLiteral(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ThisExpression:
+            str += codeFromThisExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.ThrowStatement:
+            str += codeFromThrowStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.TryStatement:
+            str += codeFromTryStatement(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.UnaryExpression:
+            str += codeFromUnaryExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.UpdateExpression:
+            str += codeFromUpdateExpression(ast);
             break;
         case typescript_estree_1.AST_NODE_TYPES.VariableDeclaration:
-            str += processVariableDeclaration(ast, str);
+            str += codeFromVariableDeclaration(ast);
             break;
         case typescript_estree_1.AST_NODE_TYPES.VariableDeclarator:
-            str += processVariableDeclarator(ast, str);
+            str += codeFromVariableDeclarator(ast);
             break;
         case typescript_estree_1.AST_NODE_TYPES.WhileStatement:
-            str += processWhileStatement(ast, str);
+            str += codeFromWhileStatement(ast);
             break;
         case typescript_estree_1.AST_NODE_TYPES.WithStatement:
-            str += processWithStatement(ast, str);
+            str += codeFromWithStatement(ast);
             break;
         case typescript_estree_1.AST_NODE_TYPES.YieldExpression:
-            str += processYieldExpression(ast, str);
+            str += codeFromYieldExpression(ast);
             break;
         case typescript_estree_1.AST_NODE_TYPES.TSEnumDeclaration:
-            str += processTSEnumDeclaration(ast, str);
+            str += codeFromTSEnumDeclaration(ast);
             break;
         default:
-            console.error('unrecornized type: %s', ast.type);
+            console.log(util.inspect(ast, true, 3));
+            throw new Error('unrecornized type: ' + ast.type);
             break;
     }
     return str;
 }
-exports.processAST = processAST;
-function processArrayExpression(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromAST = codeFromAST;
+function codeFromArrayExpression(ast) {
+    var str = '';
+    for (var i = 0, len = ast.elements.length; i < len; i++) {
+        if (str) {
+            str += ', ';
+        }
+        str += codeFromAST(ast.elements[i]);
+    }
+    return '{' + str + '}';
+}
+exports.codeFromArrayExpression = codeFromArrayExpression;
+function codeFromArrayPattern(ast) {
+    console.assert(false, 'Not support ArrayPattern yet!');
+    return '';
+}
+exports.codeFromArrayPattern = codeFromArrayPattern;
+function codeFromArrowFunctionExpression(ast) {
+    console.assert(false, 'Not support ArrowFunctionExpression yet!');
+    return '';
+}
+exports.codeFromArrowFunctionExpression = codeFromArrowFunctionExpression;
+function codeFromAssignmentExpression(ast) {
+    return codeFromBinaryExpression(ast);
+}
+exports.codeFromAssignmentExpression = codeFromAssignmentExpression;
+function codeFromAssignmentPattern(ast) {
+    return codeFromAST(ast.left) + ' = ' + codeFromAST(ast.right);
+}
+exports.codeFromAssignmentPattern = codeFromAssignmentPattern;
+function codeFromAwaitExpression(ast) {
+    console.assert(false, 'Not support AwaitExpression yet!');
+    return '';
+}
+exports.codeFromAwaitExpression = codeFromAwaitExpression;
+function codeFromBigIntLiteral(ast) {
+    return codeFromLiteral(ast);
+}
+exports.codeFromBigIntLiteral = codeFromBigIntLiteral;
+function codeFromBinaryExpression(ast) {
+    return codeFromAST(ast.left) + ast.operator + codeFromAST(ast.right);
+}
+exports.codeFromBinaryExpression = codeFromBinaryExpression;
+function codeFromBlockStatement(ast) {
+    var str = '';
+    for (var i = 0, len = ast.body.length; i < len; i++) {
+        if (!str) {
+            str += '\n';
+        }
+        str += codeFromAST(ast.body[i]);
+    }
     return str;
 }
-exports.processArrayExpression = processArrayExpression;
-function processArrayPattern(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromBlockStatement = codeFromBlockStatement;
+function codeFromBreakStatement(ast) {
+    console.assert(!ast.label, 'Not support break label yet!');
+    return 'break';
+}
+exports.codeFromBreakStatement = codeFromBreakStatement;
+function codeFromCallExpression(ast) {
+    var str = codeFromAST(ast.callee);
+    str += '(';
+    for (var i = 0, len = ast.arguments.length; i < len; i++) {
+        if (i > 0) {
+            str += ', ';
+        }
+        str += codeFromAST(ast.arguments[i]);
+    }
+    str += ')';
     return str;
 }
-exports.processArrayPattern = processArrayPattern;
-function processArrowFunctionExpression(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromCallExpression = codeFromCallExpression;
+function codeFromCatchClause(ast) {
+    var str = 'function($param$)'.replace('$param$', codeFromAST(ast.param));
+    str += codeFromBlockStatement(ast.body);
+    str += 'end';
     return str;
 }
-exports.processArrowFunctionExpression = processArrowFunctionExpression;
-function processAssignmentExpression(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromCatchClause = codeFromCatchClause;
+function codeFromClassBody(ast) {
+    var str = '';
+    for (var i = 0, len = ast.body.length; i < len; i++) {
+        if (i > 0) {
+            str += '\n';
+        }
+        str += codeFromAST(ast.body[i]);
+    }
     return str;
 }
-exports.processAssignmentExpression = processAssignmentExpression;
-function processAssignmentPattern(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromClassBody = codeFromClassBody;
+function codeFromClassDeclaration(ast) {
+    var str = '$BaseClass$:subclass("$ClassName$")\n';
+    if (ast.typeParameters) {
+        // typeParameters?: TSTypeParameterDeclaration;
+    }
+    if (ast.superTypeParameters) {
+        // TSTypeParameterInstantiation;
+    }
+    if (ast.id) {
+        // Identifier
+        var className = codeFromAST(ast.id);
+        allClasses.push(className);
+        classQueue.push(className);
+        str = str.replace('$ClassName$', className);
+    }
+    else {
+        console.assert(false, 'Class name is necessary!');
+    }
+    str += codeFromClassBody(ast.body);
+    if (ast.superClass) {
+        str = str.replace('$BaseClass$', codeFromAST(ast.superClass));
+    }
+    else {
+        str = str.replace('$BaseClass$', 'Class');
+    }
+    // if(ast.implements) {
+    //   ExpressionWithTypeArguments[];
+    // }
+    // if(ast.abstract) {
+    //   // boolean;
+    // }
+    if (ast.declare) {
+        // boolean
+        console.assert(false);
+    }
+    if (ast.decorators) {
+        // Decorator[];
+        console.assert(false);
+    }
+    classQueue.pop();
     return str;
 }
-exports.processAssignmentPattern = processAssignmentPattern;
-function processAwaitExpression(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromClassDeclaration = codeFromClassDeclaration;
+function codeFromClassExpression(ast) {
+    pintHit(ast);
+    return codeFromClassDeclaration(ast);
+}
+exports.codeFromClassExpression = codeFromClassExpression;
+function codeFromClassProperty(ast) {
+    var str = '';
+    if (ast.value) {
+        var className = classQueue[classQueue.length - 1];
+        if (ast.static) {
+            str = className + '.' + codeFromAST(ast.key) + ' = ' + codeFromAST(ast.value) + ';';
+        }
+        else {
+            str = className + '.prototype.' + codeFromAST(ast.key) + ' = ' + codeFromAST(ast.value) + ';';
+        }
+        // readonly?: boolean;
+        // decorators?: Decorator[];
+        // accessibility?: Accessibility;
+        // optional?: boolean;
+        // definite?: boolean;
+        // typeAnnotation?: TSTypeAnnotation;
+    }
     return str;
 }
-exports.processAwaitExpression = processAwaitExpression;
-function processBigIntLiteral(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromClassProperty = codeFromClassProperty;
+function codeFromConditionalExpression(ast) {
+    var str = 'if ' + codeFromAST(ast.test) + ' then \n';
+    str += codeFromAST(ast.consequent) + '\n';
+    if (ast.alternate) {
+        str += 'else \n';
+        str += codeFromAST(ast.alternate) + '\n';
+    }
+    str += 'end\n';
     return str;
 }
-exports.processBigIntLiteral = processBigIntLiteral;
-function processBinaryExpression(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromConditionalExpression = codeFromConditionalExpression;
+function codeFromContinueStatement(ast) {
+    console.assert(false, 'Not support ContinueStatement yet!');
+    return '';
+}
+exports.codeFromContinueStatement = codeFromContinueStatement;
+function codeFromDebuggerStatement(ast) {
+    console.assert(false, 'Not support DebuggerStatement yet!');
+    return '';
+}
+exports.codeFromDebuggerStatement = codeFromDebuggerStatement;
+function codeFromDecorator(ast) {
+    console.assert(false, 'Not support Decorator yet!');
+    return '';
+}
+exports.codeFromDecorator = codeFromDecorator;
+function codeFromDoWhileStatement(ast) {
+    console.assert(false, 'Not support DoWhileStatement yet!');
+    return '';
+}
+exports.codeFromDoWhileStatement = codeFromDoWhileStatement;
+function codeFromEmptyStatement(ast) {
+    console.assert(false, 'Not support EmptyStatement yet!');
+    return '';
+}
+exports.codeFromEmptyStatement = codeFromEmptyStatement;
+function codeFromExportAllDeclaration(ast) {
+    console.assert(false, 'Not support ExportAllDeclaration yet!');
+    return '';
+}
+exports.codeFromExportAllDeclaration = codeFromExportAllDeclaration;
+function codeFromExportDefaultDeclaration(ast) {
+    console.assert(false, 'Not support ExportDefaultDeclaration yet!');
+    return '';
+}
+exports.codeFromExportDefaultDeclaration = codeFromExportDefaultDeclaration;
+function codeFromExportNamedDeclaration(ast) {
+    return codeFromAST(ast.declaration);
+}
+exports.codeFromExportNamedDeclaration = codeFromExportNamedDeclaration;
+function codeFromExportSpecifier(ast) {
+    console.assert(false, 'Not support ExportSpecifier yet!');
+    return '';
+}
+exports.codeFromExportSpecifier = codeFromExportSpecifier;
+function codeFromExpressionStatement(ast) {
+    return codeFromAST(ast.expression);
+}
+exports.codeFromExpressionStatement = codeFromExpressionStatement;
+function codeFromForInStatement(ast) {
+    var str = 'for ' + codeFromAST(ast.left) + ' in pairs(' + codeFromAST(ast.right) + ') do\n';
+    str += codeFromAST(ast.body) + '\n';
+    str += 'end\n';
     return str;
 }
-exports.processBinaryExpression = processBinaryExpression;
-function processBlockStatement(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromForInStatement = codeFromForInStatement;
+function codeFromForOfStatement(ast) {
+    var str = 'for _tmpi, ' + codeFromAST(ast.left) + ' in pairs(' + codeFromAST(ast.right) + ') do\n';
+    str += codeFromAST(ast.body) + '\n';
+    str += 'end\n';
     return str;
 }
-exports.processBlockStatement = processBlockStatement;
-function processBreakStatement(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromForOfStatement = codeFromForOfStatement;
+function codeFromForStatement(ast) {
+    var str = '';
+    if (ast.init) {
+        str += codeFromAST(ast.init) + '\n';
+    }
+    str += 'repeat\n';
+    str += codeFromAST(ast.body) + '\n';
+    if (ast.update) {
+        str += codeFromAST(ast.update) + '\n';
+    }
+    str += 'until ';
+    if (ast.test) {
+        str += 'not(' + codeFromAST(ast.test) + ')';
+    }
+    else {
+        str += 'false';
+    }
+    str += '\n';
     return str;
 }
-exports.processBreakStatement = processBreakStatement;
-function processCallExpression(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromForStatement = codeFromForStatement;
+function codeFromFunctionDeclaration(ast) {
+    return codeFromFunctionExpression(ast);
+}
+exports.codeFromFunctionDeclaration = codeFromFunctionDeclaration;
+function codeFromFunctionExpression(ast) {
+    return codeFromFunctionExpressionInternal(null, ast);
+}
+exports.codeFromFunctionExpression = codeFromFunctionExpression;
+function codeFromFunctionExpressionInternal(funcName, ast) {
+    var str = '';
+    if (!funcName) {
+        funcName = codeFromAST(ast.id);
+    }
+    if (funcName) {
+        if ('constructor' == funcName) {
+            funcName = 'ctor';
+        }
+        var className = classQueue[classQueue.length - 1];
+        if (className) {
+            // 成员函数
+            str = 'function ' + className + '.prototype:' + funcName + '(';
+        }
+        else {
+            // 普通函数
+            str = 'function ' + funcName + '(';
+        }
+    }
+    else {
+        str = 'function(';
+    }
+    if (ast.params) {
+        for (var i = 0, len = ast.params.length; i < len; i++) {
+            if (i > 0) {
+                str += ', ';
+            }
+            str += codeFromAST(ast.params[i]);
+        }
+    }
+    str += ')\n';
+    if (ast.body) {
+        str += codeFromAST(ast.body) + '\n';
+    }
+    console.assert(!ast.generator, 'Not support generator yet!');
+    console.assert(!ast.async, 'Not support async yet!');
+    console.assert(!ast.expression, 'Not support expression yet!');
+    console.assert(!ast.typeParameters, 'Not support typeParameters yet!');
+    console.assert(!ast.declare, 'Not support declare yet!');
+    str += 'end\n';
     return str;
 }
-exports.processCallExpression = processCallExpression;
-function processCatchClause(ast, str) {
-    if (str === void 0) { str = ''; }
+function codeFromIdentifier(ast) {
+    return ast.name;
+}
+exports.codeFromIdentifier = codeFromIdentifier;
+function codeFromIfStatement(ast) {
+    var str = 'if ' + codeFromAST(ast.test) + ' then\n';
+    str += codeFromAST(ast.consequent) + '\n';
+    if (ast.alternate) {
+        str += 'else\n';
+        str += codeFromAST(ast.alternate) + '\n';
+    }
+    str += 'end\n';
     return str;
 }
-exports.processCatchClause = processCatchClause;
-function processClassBody(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
+exports.codeFromIfStatement = codeFromIfStatement;
+function codeFromImport(ast) {
+    console.assert(false, 'Not support Import yet!');
+    return '';
 }
-exports.processClassBody = processClassBody;
-function processClassDeclaration(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processClassDeclaration = processClassDeclaration;
-function processClassExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processClassExpression = processClassExpression;
-function processClassProperty(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processClassProperty = processClassProperty;
-function processConditionalExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processConditionalExpression = processConditionalExpression;
-function processContinueStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processContinueStatement = processContinueStatement;
-function processDebuggerStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processDebuggerStatement = processDebuggerStatement;
-function processDecorator(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processDecorator = processDecorator;
-function processDoWhileStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processDoWhileStatement = processDoWhileStatement;
-function processEmptyStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processEmptyStatement = processEmptyStatement;
-function processExportAllDeclaration(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processExportAllDeclaration = processExportAllDeclaration;
-function processExportDefaultDeclaration(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processExportDefaultDeclaration = processExportDefaultDeclaration;
-function processExportNamedDeclaration(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processExportNamedDeclaration = processExportNamedDeclaration;
-function processExportSpecifier(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processExportSpecifier = processExportSpecifier;
-function processExpressionStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processExpressionStatement = processExpressionStatement;
-function processForInStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processForInStatement = processForInStatement;
-function processForOfStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processForOfStatement = processForOfStatement;
-function processForStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processForStatement = processForStatement;
-function processFunctionDeclaration(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processFunctionDeclaration = processFunctionDeclaration;
-function processFunctionExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processFunctionExpression = processFunctionExpression;
-function processIdentifier(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processIdentifier = processIdentifier;
-function processIfStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processIfStatement = processIfStatement;
-function processImport(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processImport = processImport;
-function processImportDeclaration(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromImport = codeFromImport;
+function codeFromImportDeclaration(ast) {
     var tmpl = "require({})\n";
     return sf(tmpl, ast.source.raw);
 }
-exports.processImportDeclaration = processImportDeclaration;
-function processImportDefaultSpecifier(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromImportDeclaration = codeFromImportDeclaration;
+function codeFromImportDefaultSpecifier(ast) {
+    console.assert(false, 'Not support ImportDefaultSpecifier yet!');
+    return '';
+}
+exports.codeFromImportDefaultSpecifier = codeFromImportDefaultSpecifier;
+function codeFromImportNamespaceSpecifier(ast) {
+    console.assert(false, 'Not support ImportNamespaceSpecifier yet!');
+    return '';
+}
+exports.codeFromImportNamespaceSpecifier = codeFromImportNamespaceSpecifier;
+function codeFromImportSpecifier(ast) {
+    console.assert(false, 'Not support ImportSpecifier yet!');
+    return '';
+}
+exports.codeFromImportSpecifier = codeFromImportSpecifier;
+function codeFromLabeledStatement(ast) {
+    console.assert(false, 'Not support LabeledStatement yet!');
+    return '';
+}
+exports.codeFromLabeledStatement = codeFromLabeledStatement;
+function codeFromLiteral(ast) {
+    if (ast.regex) {
+        console.assert(false, 'Not support regex yet!');
+    }
+    return ast.raw;
+}
+exports.codeFromLiteral = codeFromLiteral;
+function codeFromLogicalExpression(ast) {
+    var left = codeFromAST(ast.left);
+    if (calPriority(ast.left) >= calPriority(ast)) {
+        left = '(' + left + ')';
+    }
+    var right = codeFromAST(ast.right);
+    if (calPriority(ast.right) >= calPriority(ast)) {
+        right = '(' + right + ')';
+    }
+    var str = left + ast.operator + right;
     return str;
 }
-exports.processImportDefaultSpecifier = processImportDefaultSpecifier;
-function processImportNamespaceSpecifier(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processImportNamespaceSpecifier = processImportNamespaceSpecifier;
-function processImportSpecifier(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processImportSpecifier = processImportSpecifier;
-function processLabeledStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processLabeledStatement = processLabeledStatement;
-function processLiteral(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processLiteral = processLiteral;
-function processLogicalExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processLogicalExpression = processLogicalExpression;
-function processMemberExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processMemberExpression = processMemberExpression;
-function processMetaProperty(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processMetaProperty = processMetaProperty;
-function processMethodDefinition(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processMethodDefinition = processMethodDefinition;
-function processNewExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processNewExpression = processNewExpression;
-function processObjectExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processObjectExpression = processObjectExpression;
-function processObjectPattern(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processObjectPattern = processObjectPattern;
-function processProgram(ast, str) {
-    if (str === void 0) { str = ''; }
-    for (var i = 0, len = ast.body.length; i < len; i++) {
-        var stm = ast.body[i];
-        str = processAST(stm, str);
+exports.codeFromLogicalExpression = codeFromLogicalExpression;
+function codeFromMemberExpression(ast) {
+    var str = codeFromAST(ast.object);
+    if (noBraceTypes.indexOf(ast.object.type) < 0) {
+        str = '(' + str + ')';
+    }
+    if (ast.computed) {
+        str += '[' + codeFromAST(ast.property) + ']';
+    }
+    else {
+        str += '.' + codeFromAST(ast.property);
     }
     return str;
 }
-exports.processProgram = processProgram;
-function processProperty(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromMemberExpression = codeFromMemberExpression;
+function codeFromMetaProperty(ast) {
+    console.assert(false, 'Not support MetaProperty yet!');
+    return '';
+}
+exports.codeFromMetaProperty = codeFromMetaProperty;
+function codeFromMethodDefinition(ast) {
+    var funcName = null;
+    if (ast.key) {
+        funcName = codeFromAST(ast.key);
+    }
+    if (ast.value.type == "TSEmptyBodyFunctionExpression") {
+        console.assert(false, 'Not support TSEmptyBodyFunctionExpression yet!');
+    }
+    return codeFromFunctionExpressionInternal(funcName, ast.value);
+}
+exports.codeFromMethodDefinition = codeFromMethodDefinition;
+function codeFromNewExpression(ast) {
+    var callee = codeFromAST(ast.callee);
+    if (calPriority(ast.callee) > calPriority(ast)) {
+        callee = '(' + callee + ')';
+    }
+    var str = callee + '(';
+    for (var i = 0, len = ast.arguments.length; i < len; i++) {
+        if (i > 0) {
+            str += ', ';
+        }
+        str += codeFromAST(ast.arguments[i]);
+    }
+    str += ')';
     return str;
 }
-exports.processProperty = processProperty;
-function processRestElement(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromNewExpression = codeFromNewExpression;
+function codeFromObjectExpression(ast) {
+    var str = '{';
+    for (var i = 0, len = ast.properties.length; i < len; i++) {
+        if (i > 0) {
+            str += ', ';
+        }
+        str += codeFromAST(ast.properties[i]);
+    }
+    return str + '}';
+}
+exports.codeFromObjectExpression = codeFromObjectExpression;
+function codeFromObjectPattern(ast) {
+    console.assert(false, 'Not support ObjectPattern yet!');
+    return '';
+}
+exports.codeFromObjectPattern = codeFromObjectPattern;
+function codeFromProgram(ast) {
+    var str = '';
+    for (var i = 0, len = ast.body.length; i < len; i++) {
+        var stm = ast.body[i];
+        str += codeFromAST(stm);
+    }
     return str;
 }
-exports.processRestElement = processRestElement;
-function processReturnStatement(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromProgram = codeFromProgram;
+function codeFromProperty(ast) {
+    return codeFromAST(ast.key) + ':' + codeFromAST(ast.value);
+}
+exports.codeFromProperty = codeFromProperty;
+function codeFromRestElement(ast) {
+    console.assert(false, 'Not support RestElement yet!');
+    return '';
+}
+exports.codeFromRestElement = codeFromRestElement;
+function codeFromReturnStatement(ast) {
+    return 'return ' + codeFromAST(ast.argument) + ';\n';
+}
+exports.codeFromReturnStatement = codeFromReturnStatement;
+function codeFromSequenceExpression(ast) {
+    var str = '(';
+    for (var i = 0, len = ast.expressions.length; i < len; i++) {
+        if (i > 0) {
+            str += ', ';
+        }
+        str += codeFromAST(ast.expressions[i]);
+    }
+    return str + ')';
+}
+exports.codeFromSequenceExpression = codeFromSequenceExpression;
+function codeFromSpreadElement(ast) {
+    console.assert(false, 'Not support SpreadElement yet!');
+    return '';
+}
+exports.codeFromSpreadElement = codeFromSpreadElement;
+function codeFromSuper(ast) {
+    var className = classQueue[classQueue.length - 1];
+    return className + '.super';
+}
+exports.codeFromSuper = codeFromSuper;
+function codeFromSwitchCase(ast) {
+    var str = '';
+    if (ast.test) {
+        str += '[' + codeFromAST(ast.test) + '] = function()\n';
+    }
+    else {
+        str += '["default"] = function()\n';
+    }
+    for (var i = 0, len = ast.consequent.length; i < len; i++) {
+        str += codeFromAST(ast.consequent[i]) + '\n';
+    }
+    str += 'end\n';
     return str;
 }
-exports.processReturnStatement = processReturnStatement;
-function processSequenceExpression(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromSwitchCase = codeFromSwitchCase;
+function codeFromSwitchStatement(ast) {
+    var str = 'local switch = {\n';
+    for (var i = 0, len = ast.cases.length; i < len; i++) {
+        if (i > 0) {
+            str += ',\n';
+        }
+        str += codeFromSwitchCase(ast.cases[i]);
+    }
+    str += '}\n';
+    str += 'local casef = switch[' + codeFromAST(ast.discriminant) + ']\n';
+    str += 'if not casef then\n';
+    str += 'casef = switch["default"]\n';
+    str += 'end\n';
+    str += 'casef()\n';
+    str += 'end\n';
     return str;
 }
-exports.processSequenceExpression = processSequenceExpression;
-function processSpreadElement(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromSwitchStatement = codeFromSwitchStatement;
+function codeFromTaggedTemplateExpression(ast) {
+    console.assert(false, 'Not support TaggedTemplateExpression yet!');
+    return '';
+}
+exports.codeFromTaggedTemplateExpression = codeFromTaggedTemplateExpression;
+function codeFromTemplateElement(ast) {
+    console.assert(false, 'Not support TemplateElement yet!');
+    return '';
+}
+exports.codeFromTemplateElement = codeFromTemplateElement;
+function codeFromTemplateLiteral(ast) {
+    console.assert(false, 'Not support TemplateLiteral yet!');
+    return '';
+}
+exports.codeFromTemplateLiteral = codeFromTemplateLiteral;
+function codeFromThisExpression(ast) {
+    return 'self';
+}
+exports.codeFromThisExpression = codeFromThisExpression;
+function codeFromThrowStatement(ast) {
+    return 'error(' + codeFromAST(ast.argument) + ')\n';
+}
+exports.codeFromThrowStatement = codeFromThrowStatement;
+function codeFromTryStatement(ast) {
+    console.assert(false, 'Not support codeFromTryStatement yet!');
+    return '';
+}
+exports.codeFromTryStatement = codeFromTryStatement;
+function codeFromUnaryExpression(ast) {
+    var str;
+    var agm = codeFromAST(ast.argument);
+    if (calPriority(ast.argument) >= calPriority(ast)) {
+        agm = '(' + agm + ')';
+    }
+    if (ast.prefix) {
+        if ('typeof' == ast.operator) {
+            str = 'type(' + agm + ')';
+        }
+        else if ('delete' == ast.operator) {
+            str = agm + ' = nil';
+        }
+        else if ('void' == ast.operator) {
+            console.assert(false, 'Not support void yet!');
+        }
+        else {
+            console.assert(false, 'Not support UnaryOperator: ' + ast.operator);
+            str = ast.operator + agm;
+        }
+    }
+    else {
+        str = agm + ast.operator;
+    }
     return str;
 }
-exports.processSpreadElement = processSpreadElement;
-function processSuper(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromUnaryExpression = codeFromUnaryExpression;
+function codeFromUpdateExpression(ast) {
+    console.assert(false, 'Not support UpdateExpression yet');
+    var str = codeFromAST(ast.argument);
+    if (calPriority(ast.argument) >= calPriority(ast)) {
+        str = '(' + str + ')';
+    }
+    if (ast.prefix) {
+        str = ast.operator + str;
+    }
+    else {
+        str = str + ast.operator;
+    }
     return str;
 }
-exports.processSuper = processSuper;
-function processSwitchCase(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromUpdateExpression = codeFromUpdateExpression;
+function codeFromVariableDeclaration(ast) {
+    // not support const
+    var str = '';
+    for (var i = 0, len = ast.declarations.length; i < len; i++) {
+        // TODO: no local in for statement
+        str += 'local ' + codeFromVariableDeclarator(ast.declarations[i]) + '\n';
+    }
     return str;
 }
-exports.processSwitchCase = processSwitchCase;
-function processSwitchStatement(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromVariableDeclaration = codeFromVariableDeclaration;
+function codeFromVariableDeclarator(ast) {
+    var str = codeFromAST(ast.id);
+    if (ast.init) {
+        str += '=' + codeFromAST(ast.init);
+    }
+    else {
+        console.assert(false, 'Not support VariableDeclarator without init yet');
+    }
     return str;
 }
-exports.processSwitchStatement = processSwitchStatement;
-function processTaggedTemplateExpression(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromVariableDeclarator = codeFromVariableDeclarator;
+function codeFromWhileStatement(ast) {
+    var str = 'while(' + codeFromAST(ast.test) + ')\n';
+    str += 'do\n';
+    var bodyCode = codeFromAST(ast.body);
+    str += bodyCode + '\n';
+    str += 'end\n';
     return str;
 }
-exports.processTaggedTemplateExpression = processTaggedTemplateExpression;
-function processTemplateElement(ast, str) {
-    if (str === void 0) { str = ''; }
+exports.codeFromWhileStatement = codeFromWhileStatement;
+function codeFromWithStatement(ast) {
+    console.assert(false, 'Not support WithStatement yet');
+    return '';
+}
+exports.codeFromWithStatement = codeFromWithStatement;
+function codeFromYieldExpression(ast) {
+    var str = 'coroutine.yield(';
+    str += codeFromAST(ast.argument);
+    str += ')';
     return str;
 }
-exports.processTemplateElement = processTemplateElement;
-function processTemplateLiteral(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
+exports.codeFromYieldExpression = codeFromYieldExpression;
+function codeFromTSEnumDeclaration(ast) {
+    console.assert(false, 'Not support TSEnumDeclaration yet');
+    return '';
 }
-exports.processTemplateLiteral = processTemplateLiteral;
-function processThisExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
+exports.codeFromTSEnumDeclaration = codeFromTSEnumDeclaration;
+function pintHit(ast) {
+    console.warn('hit %s!', ast.type);
+    console.log(util.inspect(ast, true, 4));
 }
-exports.processThisExpression = processThisExpression;
-function processThrowStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processThrowStatement = processThrowStatement;
-function processTryStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processTryStatement = processTryStatement;
-function processUnaryExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processUnaryExpression = processUnaryExpression;
-function processUpdateExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processUpdateExpression = processUpdateExpression;
-function processVariableDeclaration(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processVariableDeclaration = processVariableDeclaration;
-function processVariableDeclarator(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processVariableDeclarator = processVariableDeclarator;
-function processWhileStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processWhileStatement = processWhileStatement;
-function processWithStatement(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processWithStatement = processWithStatement;
-function processYieldExpression(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processYieldExpression = processYieldExpression;
-function processTSEnumDeclaration(ast, str) {
-    if (str === void 0) { str = ''; }
-    return str;
-}
-exports.processTSEnumDeclaration = processTSEnumDeclaration;

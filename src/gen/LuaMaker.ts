@@ -1,589 +1,1051 @@
-import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
+import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration, BindingName } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
 import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree';
 import sf = require('string-format');
-
-export function processAST(ast: any, str: string = ''): string {
-  switch(ast.type) {
-    
-      case AST_NODE_TYPES.ArrayExpression:
-        str += processArrayExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ArrayPattern:
-        str += processArrayPattern(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ArrowFunctionExpression:
-        str += processArrowFunctionExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.AssignmentExpression:
-        str += processAssignmentExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.AssignmentPattern:
-        str += processAssignmentPattern(ast, str);
-        break;
-
-      case AST_NODE_TYPES.AwaitExpression:
-        str += processAwaitExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.BigIntLiteral:
-        str += processBigIntLiteral(ast, str);
-        break;
-
-      case AST_NODE_TYPES.BinaryExpression:
-        str += processBinaryExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.BlockStatement:
-        str += processBlockStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.BreakStatement:
-        str += processBreakStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.CallExpression:
-        str += processCallExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.CatchClause:
-        str += processCatchClause(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ClassBody:
-        str += processClassBody(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ClassDeclaration:
-        str += processClassDeclaration(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ClassExpression:
-        str += processClassExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ClassProperty:
-        str += processClassProperty(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ConditionalExpression:
-        str += processConditionalExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ContinueStatement:
-        str += processContinueStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.DebuggerStatement:
-        str += processDebuggerStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.Decorator:
-        str += processDecorator(ast, str);
-        break;
-
-      case AST_NODE_TYPES.DoWhileStatement:
-        str += processDoWhileStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.EmptyStatement:
-        str += processEmptyStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ExportAllDeclaration:
-        str += processExportAllDeclaration(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ExportDefaultDeclaration:
-        str += processExportDefaultDeclaration(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ExportNamedDeclaration:
-        str += processExportNamedDeclaration(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ExportSpecifier:
-        str += processExportSpecifier(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ExpressionStatement:
-        str += processExpressionStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ForInStatement:
-        str += processForInStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ForOfStatement:
-        str += processForOfStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ForStatement:
-        str += processForStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.FunctionDeclaration:
-        str += processFunctionDeclaration(ast, str);
-        break;
-
-      case AST_NODE_TYPES.FunctionExpression:
-        str += processFunctionExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.Identifier:
-        str += processIdentifier(ast, str);
-        break;
-
-      case AST_NODE_TYPES.IfStatement:
-        str += processIfStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.Import:
-        str += processImport(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ImportDeclaration:
-        str += processImportDeclaration(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ImportDefaultSpecifier:
-        str += processImportDefaultSpecifier(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ImportNamespaceSpecifier:
-        str += processImportNamespaceSpecifier(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ImportSpecifier:
-        str += processImportSpecifier(ast, str);
-        break;
-
-      case AST_NODE_TYPES.LabeledStatement:
-        str += processLabeledStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.Literal:
-        str += processLiteral(ast, str);
-        break;
-
-      case AST_NODE_TYPES.LogicalExpression:
-        str += processLogicalExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.MemberExpression:
-        str += processMemberExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.MetaProperty:
-        str += processMetaProperty(ast, str);
-        break;
-
-      case AST_NODE_TYPES.MethodDefinition:
-        str += processMethodDefinition(ast, str);
-        break;
-
-      case AST_NODE_TYPES.NewExpression:
-        str += processNewExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ObjectExpression:
-        str += processObjectExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ObjectPattern:
-        str += processObjectPattern(ast, str);
-        break;
-
-      case AST_NODE_TYPES.Program:
-        str += processProgram(ast, str);
-        break;
-
-      case AST_NODE_TYPES.Property:
-        str += processProperty(ast, str);
-        break;
-
-      case AST_NODE_TYPES.RestElement:
-        str += processRestElement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ReturnStatement:
-        str += processReturnStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.SequenceExpression:
-        str += processSequenceExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.SpreadElement:
-        str += processSpreadElement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.Super:
-        str += processSuper(ast, str);
-        break;
-
-      case AST_NODE_TYPES.SwitchCase:
-        str += processSwitchCase(ast, str);
-        break;
-
-      case AST_NODE_TYPES.SwitchStatement:
-        str += processSwitchStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.TaggedTemplateExpression:
-        str += processTaggedTemplateExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.TemplateElement:
-        str += processTemplateElement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.TemplateLiteral:
-        str += processTemplateLiteral(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ThisExpression:
-        str += processThisExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.ThrowStatement:
-        str += processThrowStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.TryStatement:
-        str += processTryStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.UnaryExpression:
-        str += processUnaryExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.UpdateExpression:
-        str += processUpdateExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.VariableDeclaration:
-        str += processVariableDeclaration(ast, str);
-        break;
-
-      case AST_NODE_TYPES.VariableDeclarator:
-        str += processVariableDeclarator(ast, str);
-        break;
-
-      case AST_NODE_TYPES.WhileStatement:
-        str += processWhileStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.WithStatement:
-        str += processWithStatement(ast, str);
-        break;
-
-      case AST_NODE_TYPES.YieldExpression:
-        str += processYieldExpression(ast, str);
-        break;
-
-      case AST_NODE_TYPES.TSEnumDeclaration:
-        str += processTSEnumDeclaration(ast, str);
-        break;
+import util = require('util')
+
+let blockDeep = 0;
+let allClasses: string[] = [];
+let classQueue: string[] = [];
+
+const noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier];
+
+let pv = 0;
+const operatorPriorityMap: { [opt: string]: number } = {};
+setPriority(['( … )'], pv++);
+setPriority(['… . …', '… [ … ]', 'new … ( … )', '… ( … )'], pv++);
+setPriority(['new …'], pv++);
+setPriority(['… ++', '… --'], pv++);
+setPriority(['! …', '~ …', '+ …', '- …', '++ …', '-- …', 'typeof …', 'void …', 'delete …', 'await …'], pv++);
+setPriority(['… ** …'], pv++);
+setPriority(['… * …', '… / …', '… % …'], pv++);
+setPriority(['… + …', '… - …'], pv++);
+setPriority(['… << …', '… >> …', '… >>> …'], pv++);
+setPriority(['… < …', '… <= …', '… > …', '… >= …', '… in …', '… instanceof …'], pv++);
+setPriority(['… == …', '… != …', '… === …', '… !== …'], pv++);
+setPriority(['… & …'], pv++);
+setPriority(['… ^ …'], pv++);
+setPriority(['… | …'], pv++);
+setPriority(['… && …'], pv++);
+setPriority(['… || …'], pv++);
+setPriority(['… ? … : …'], pv++);
+setPriority(['… = …', '… += …', '… -= …', '… *= …', '… /= …', '… %= …', '… <<= …', '… >>= …', '… >>>= …', '… &= …', '… ^= …', '… |= …'], pv++);
+setPriority(['yield …', 'yield* …'], pv++);
+setPriority(['...'], pv++);
+setPriority(['… , …'], pv++);
+
+function setPriority(keys: string[], value: number) {
+  for (let i = 0, len = keys.length; i < len; i++) {
+    operatorPriorityMap[keys[i]] = value;
+  }
+}
+
+function getPriority(raw: string) {
+  var idx = operatorPriorityMap[raw];
+  if (idx < 0) {
+    idx = 999;
+    console.error('no prioritys: ' + raw);
+  }
+  return idx;
+}
+
+function calPriority(ast: any) {
+  if ('__calPriority' in ast) {
+    return ast.__calPriority;
+  }
+  switch (ast.type) {
+    case AST_NODE_TYPES.UnaryExpression:
+      {
+        let ue = ast as UnaryExpression;
+        ast.__calPriority = getPriority(ue.prefix ? ue.operator + ' …' : '… ' + ue.operator);
+      }
+      break;
+
+    case AST_NODE_TYPES.UpdateExpression:
+      {
+        let ue = ast as UpdateExpression;
+        ast.__calPriority = getPriority(ue.prefix ? ue.operator + ' …' : '… ' + ue.operator);
+      }
+      break;
+
+    case AST_NODE_TYPES.BinaryExpression:
+      {
+        let be = ast as BinaryExpression;
+        ast.__calPriority = getPriority('… ' + be.operator + ' …');
+      }
+      break;
+
+    case AST_NODE_TYPES.AssignmentExpression:
+      {
+        let ae = ast as AssignmentExpression;
+        ast.__calPriority = getPriority('… ' + ae.operator + ' …');
+      }
+      break;
+
+    case AST_NODE_TYPES.LogicalExpression:
+      {
+        let le = ast as LogicalExpression;
+        ast.__calPriority = getPriority('… ' + le.operator + ' …');
+      }
+      break;
+
+    case AST_NODE_TYPES.MemberExpression:
+      {
+        let me = ast as MemberExpression;
+        ast.__calPriority = getPriority(me.computed ? '… [ … ]' : '… . …');
+      }
+      break;
+
+    case AST_NODE_TYPES.ConditionalExpression:
+      {
+        ast.__calPriority = getPriority('… ? … : …');
+      }
+      break;
+
+    case AST_NODE_TYPES.CallExpression:
+      {
+        ast.__calPriority = getPriority('… ( … )');
+      }
+      break;
+
+    case AST_NODE_TYPES.NewExpression:
+      {
+        let ne = ast as NewExpression;
+        if (ne.arguments.length > 0) {
+          ast.__calPriority = getPriority('new … ( … )');
+        } else {
+          ast.__calPriority = getPriority('new …');
+        }
+      }
+      break;
+
+    case AST_NODE_TYPES.SequenceExpression:
+      {
+        ast.__calPriority = getPriority('… , …');
+      }
+      break;
+  }
+  return ast.__calPriority;
+}
+
+export function toLua(ast: any): string {
+  blockDeep = 0;
+  allClasses.length = 0;
+  classQueue.length = 0;
+  let content = codeFromAST(ast);
+  if(allClasses.length > 0) {
+    content = 'require("class")\n' + content;
+  }
+  return content;
+}
+
+export function codeFromAST(ast: any): string {
+  let str = '';
+  switch (ast.type) {
+
+    case AST_NODE_TYPES.ArrayExpression:
+      str += codeFromArrayExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.ArrayPattern:
+      str += codeFromArrayPattern(ast);
+      break;
+
+    case AST_NODE_TYPES.ArrowFunctionExpression:
+      str += codeFromArrowFunctionExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.AssignmentExpression:
+      str += codeFromAssignmentExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.AssignmentPattern:
+      str += codeFromAssignmentPattern(ast);
+      break;
+
+    case AST_NODE_TYPES.AwaitExpression:
+      str += codeFromAwaitExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.BigIntLiteral:
+      str += codeFromBigIntLiteral(ast);
+      break;
+
+    case AST_NODE_TYPES.BinaryExpression:
+      str += codeFromBinaryExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.BlockStatement:
+      str += codeFromBlockStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.BreakStatement:
+      str += codeFromBreakStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.CallExpression:
+      str += codeFromCallExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.CatchClause:
+      str += codeFromCatchClause(ast);
+      break;
+
+    case AST_NODE_TYPES.ClassBody:
+      str += codeFromClassBody(ast);
+      break;
+
+    case AST_NODE_TYPES.ClassDeclaration:
+      str += codeFromClassDeclaration(ast);
+      break;
+
+    case AST_NODE_TYPES.ClassExpression:
+      str += codeFromClassExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.ClassProperty:
+      str += codeFromClassProperty(ast);
+      break;
+
+    case AST_NODE_TYPES.ConditionalExpression:
+      str += codeFromConditionalExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.ContinueStatement:
+      str += codeFromContinueStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.DebuggerStatement:
+      str += codeFromDebuggerStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.Decorator:
+      str += codeFromDecorator(ast);
+      break;
+
+    case AST_NODE_TYPES.DoWhileStatement:
+      str += codeFromDoWhileStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.EmptyStatement:
+      str += codeFromEmptyStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.ExportAllDeclaration:
+      str += codeFromExportAllDeclaration(ast);
+      break;
+
+    case AST_NODE_TYPES.ExportDefaultDeclaration:
+      str += codeFromExportDefaultDeclaration(ast);
+      break;
+
+    case AST_NODE_TYPES.ExportNamedDeclaration:
+      str += codeFromExportNamedDeclaration(ast);
+      break;
+
+    case AST_NODE_TYPES.ExportSpecifier:
+      str += codeFromExportSpecifier(ast);
+      break;
+
+    case AST_NODE_TYPES.ExpressionStatement:
+      str += codeFromExpressionStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.ForInStatement:
+      str += codeFromForInStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.ForOfStatement:
+      str += codeFromForOfStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.ForStatement:
+      str += codeFromForStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.FunctionDeclaration:
+      str += codeFromFunctionDeclaration(ast);
+      break;
+
+    case AST_NODE_TYPES.FunctionExpression:
+      str += codeFromFunctionExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.Identifier:
+      str += codeFromIdentifier(ast);
+      break;
+
+    case AST_NODE_TYPES.IfStatement:
+      str += codeFromIfStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.Import:
+      str += codeFromImport(ast);
+      break;
+
+    case AST_NODE_TYPES.ImportDeclaration:
+      str += codeFromImportDeclaration(ast);
+      break;
+
+    case AST_NODE_TYPES.ImportDefaultSpecifier:
+      str += codeFromImportDefaultSpecifier(ast);
+      break;
+
+    case AST_NODE_TYPES.ImportNamespaceSpecifier:
+      str += codeFromImportNamespaceSpecifier(ast);
+      break;
+
+    case AST_NODE_TYPES.ImportSpecifier:
+      str += codeFromImportSpecifier(ast);
+      break;
+
+    case AST_NODE_TYPES.LabeledStatement:
+      str += codeFromLabeledStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.Literal:
+      str += codeFromLiteral(ast);
+      break;
+
+    case AST_NODE_TYPES.LogicalExpression:
+      str += codeFromLogicalExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.MemberExpression:
+      str += codeFromMemberExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.MetaProperty:
+      str += codeFromMetaProperty(ast);
+      break;
+
+    case AST_NODE_TYPES.MethodDefinition:
+      str += codeFromMethodDefinition(ast);
+      break;
+
+    case AST_NODE_TYPES.NewExpression:
+      str += codeFromNewExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.ObjectExpression:
+      str += codeFromObjectExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.ObjectPattern:
+      str += codeFromObjectPattern(ast);
+      break;
+
+    case AST_NODE_TYPES.Program:
+      str += codeFromProgram(ast);
+      break;
+
+    case AST_NODE_TYPES.Property:
+      str += codeFromProperty(ast);
+      break;
+
+    case AST_NODE_TYPES.RestElement:
+      str += codeFromRestElement(ast);
+      break;
+
+    case AST_NODE_TYPES.ReturnStatement:
+      str += codeFromReturnStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.SequenceExpression:
+      str += codeFromSequenceExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.SpreadElement:
+      str += codeFromSpreadElement(ast);
+      break;
+
+    case AST_NODE_TYPES.Super:
+      str += codeFromSuper(ast);
+      break;
+
+    case AST_NODE_TYPES.SwitchCase:
+      str += codeFromSwitchCase(ast);
+      break;
+
+    case AST_NODE_TYPES.SwitchStatement:
+      str += codeFromSwitchStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.TaggedTemplateExpression:
+      str += codeFromTaggedTemplateExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.TemplateElement:
+      str += codeFromTemplateElement(ast);
+      break;
+
+    case AST_NODE_TYPES.TemplateLiteral:
+      str += codeFromTemplateLiteral(ast);
+      break;
+
+    case AST_NODE_TYPES.ThisExpression:
+      str += codeFromThisExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.ThrowStatement:
+      str += codeFromThrowStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.TryStatement:
+      str += codeFromTryStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.UnaryExpression:
+      str += codeFromUnaryExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.UpdateExpression:
+      str += codeFromUpdateExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.VariableDeclaration:
+      str += codeFromVariableDeclaration(ast);
+      break;
+
+    case AST_NODE_TYPES.VariableDeclarator:
+      str += codeFromVariableDeclarator(ast);
+      break;
+
+    case AST_NODE_TYPES.WhileStatement:
+      str += codeFromWhileStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.WithStatement:
+      str += codeFromWithStatement(ast);
+      break;
+
+    case AST_NODE_TYPES.YieldExpression:
+      str += codeFromYieldExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.TSEnumDeclaration:
+      str += codeFromTSEnumDeclaration(ast);
+      break;
 
     default:
-      console.error('unrecornized type: %s', ast.type);
+      console.log(util.inspect(ast, true, 3));
+      throw new Error('unrecornized type: ' + ast.type);
       break;
   }
   return str;
 }
 
 
-export function processArrayExpression(ast: ArrayExpression, str: string = ''): string {
+export function codeFromArrayExpression(ast: ArrayExpression): string {
+  let str = '';
+  for (let i = 0, len = ast.elements.length; i < len; i++) {
+    if (str) {
+      str += ', ';
+    }
+    str += codeFromAST(ast.elements[i]);
+  }
+  return '{' + str + '}';
+}
+
+export function codeFromArrayPattern(ast: ArrayPattern): string {
+  console.assert(false, 'Not support ArrayPattern yet!');
+  return '';
+}
+
+export function codeFromArrowFunctionExpression(ast: ArrowFunctionExpression): string {
+  console.assert(false, 'Not support ArrowFunctionExpression yet!');
+  return '';
+}
+
+export function codeFromAssignmentExpression(ast: AssignmentExpression): string {
+  return codeFromBinaryExpression(ast as any);
+}
+
+export function codeFromAssignmentPattern(ast: AssignmentPattern): string {
+  return codeFromAST(ast.left) + ' = ' + codeFromAST(ast.right);
+}
+
+export function codeFromAwaitExpression(ast: AwaitExpression): string {
+  console.assert(false, 'Not support AwaitExpression yet!');
+  return '';
+}
+
+export function codeFromBigIntLiteral(ast: BigIntLiteral): string {
+  return codeFromLiteral(ast as any);
+}
+
+export function codeFromBinaryExpression(ast: BinaryExpression): string {
+  return codeFromAST(ast.left) + ast.operator + codeFromAST(ast.right);
+}
+
+export function codeFromBlockStatement(ast: BlockStatement): string {
+  let str = '';
+  for (let i = 0, len = ast.body.length; i < len; i++) {
+    if (!str) {
+      str += '\n';
+    }
+    str += codeFromAST(ast.body[i]);
+  }
   return str;
 }
 
-export function processArrayPattern(ast: ArrayPattern, str: string = ''): string {
+export function codeFromBreakStatement(ast: BreakStatement): string {
+  console.assert(!ast.label, 'Not support break label yet!')
+  return 'break';
+}
+
+export function codeFromCallExpression(ast: CallExpression): string {
+  let str = codeFromAST(ast.callee);
+  str += '(';
+  for (let i = 0, len = ast.arguments.length; i < len; i++) {
+    if (i > 0) {
+      str += ', ';
+    }
+    str += codeFromAST(ast.arguments[i]);
+  }
+  str += ')';
   return str;
 }
 
-export function processArrowFunctionExpression(ast: ArrowFunctionExpression, str: string = ''): string {
+export function codeFromCatchClause(ast: CatchClause): string {
+  let str = 'function($param$)'.replace('$param$', codeFromAST(ast.param));
+  str += codeFromBlockStatement(ast.body);
+  str += 'end';
   return str;
 }
 
-export function processAssignmentExpression(ast: AssignmentExpression, str: string = ''): string {
+export function codeFromClassBody(ast: ClassBody): string {
+  let str = '';
+  for (let i = 0, len = ast.body.length; i < len; i++) {
+    if (i > 0) {
+      str += '\n';
+    }
+    str += codeFromAST(ast.body[i]);
+  }
   return str;
 }
 
-export function processAssignmentPattern(ast: AssignmentPattern, str: string = ''): string {
+export function codeFromClassDeclaration(ast: ClassDeclaration): string {
+  let str = '$BaseClass$:subclass("$ClassName$")\n';
+  if (ast.typeParameters) {
+    // typeParameters?: TSTypeParameterDeclaration;
+  }
+  if (ast.superTypeParameters) {
+    // TSTypeParameterInstantiation;
+  }
+  if (ast.id) {
+    // Identifier
+    let className = codeFromAST(ast.id);
+    allClasses.push(className);
+    classQueue.push(className);
+    str = str.replace('$ClassName$', className);
+  } else {
+    console.assert(false, 'Class name is necessary!');
+  }
+  str += codeFromClassBody(ast.body);
+  if (ast.superClass) {
+    str = str.replace('$BaseClass$', codeFromAST(ast.superClass));
+  } else {
+    str = str.replace('$BaseClass$', 'Class');
+  }
+  // if(ast.implements) {
+  //   ExpressionWithTypeArguments[];
+  // }
+  // if(ast.abstract) {
+  //   // boolean;
+  // }
+  if (ast.declare) {
+    // boolean
+    console.assert(false);
+  }
+  if (ast.decorators) {
+    // Decorator[];
+    console.assert(false);
+  }
+  classQueue.pop();
   return str;
 }
 
-export function processAwaitExpression(ast: AwaitExpression, str: string = ''): string {
+export function codeFromClassExpression(ast: ClassExpression): string {
+  pintHit(ast);
+  return codeFromClassDeclaration(ast as any);
+}
+
+export function codeFromClassProperty(ast: ClassProperty): string {
+  let str = '';
+  if (ast.value) {
+    let className = classQueue[classQueue.length - 1];
+    if (ast.static) {
+      str = className + '.' + codeFromAST(ast.key) + ' = ' + codeFromAST(ast.value) + ';';
+    } else {
+      str = className + '.prototype.' + codeFromAST(ast.key) + ' = ' + codeFromAST(ast.value) + ';';
+    }
+    // readonly?: boolean;
+    // decorators?: Decorator[];
+    // accessibility?: Accessibility;
+    // optional?: boolean;
+    // definite?: boolean;
+    // typeAnnotation?: TSTypeAnnotation;
+  }
+
   return str;
 }
 
-export function processBigIntLiteral(ast: BigIntLiteral, str: string = ''): string {
+export function codeFromConditionalExpression(ast: ConditionalExpression): string {
+  let str = 'if ' + codeFromAST(ast.test) + ' then \n';
+  str += codeFromAST(ast.consequent) + '\n';
+  if (ast.alternate) {
+    str += 'else \n';
+    str += codeFromAST(ast.alternate) + '\n';
+  }
+  str += 'end\n';
   return str;
 }
 
-export function processBinaryExpression(ast: BinaryExpression, str: string = ''): string {
+export function codeFromContinueStatement(ast: ContinueStatement): string {
+  console.assert(false, 'Not support ContinueStatement yet!');
+  return '';
+}
+
+export function codeFromDebuggerStatement(ast: DebuggerStatement): string {
+  console.assert(false, 'Not support DebuggerStatement yet!');
+  return '';
+}
+
+export function codeFromDecorator(ast: Decorator): string {
+  console.assert(false, 'Not support Decorator yet!');
+  return '';
+}
+
+export function codeFromDoWhileStatement(ast: DoWhileStatement): string {
+  console.assert(false, 'Not support DoWhileStatement yet!');
+  return '';
+}
+
+export function codeFromEmptyStatement(ast: EmptyStatement): string {
+  console.assert(false, 'Not support EmptyStatement yet!');
+  return '';
+}
+
+export function codeFromExportAllDeclaration(ast: ExportAllDeclaration): string {
+  console.assert(false, 'Not support ExportAllDeclaration yet!');
+  return '';
+}
+
+export function codeFromExportDefaultDeclaration(ast: ExportDefaultDeclaration): string {
+  console.assert(false, 'Not support ExportDefaultDeclaration yet!');
+  return '';
+}
+
+export function codeFromExportNamedDeclaration(ast: ExportNamedDeclaration): string {
+  return codeFromAST(ast.declaration);
+}
+
+export function codeFromExportSpecifier(ast: ExportSpecifier): string {
+  console.assert(false, 'Not support ExportSpecifier yet!');
+  return '';
+}
+
+export function codeFromExpressionStatement(ast: ExpressionStatement): string {
+  return codeFromAST(ast.expression);
+}
+
+export function codeFromForInStatement(ast: ForInStatement): string {
+  let str = 'for ' + codeFromAST(ast.left) + ' in pairs(' + codeFromAST(ast.right) + ') do\n';
+  str += codeFromAST(ast.body) + '\n';
+  str += 'end\n';
   return str;
 }
 
-export function processBlockStatement(ast: BlockStatement, str: string = ''): string {
+export function codeFromForOfStatement(ast: ForOfStatement): string {
+  let str = 'for _tmpi, ' + codeFromAST(ast.left) + ' in pairs(' + codeFromAST(ast.right) + ') do\n';
+  str += codeFromAST(ast.body) + '\n';
+  str += 'end\n';
   return str;
 }
 
-export function processBreakStatement(ast: BreakStatement, str: string = ''): string {
+export function codeFromForStatement(ast: ForStatement): string {
+  let str = '';
+  if (ast.init) {
+    str += codeFromAST(ast.init) + '\n';
+  }
+  str += 'repeat\n';
+  str += codeFromAST(ast.body) + '\n';
+  if (ast.update) {
+    str += codeFromAST(ast.update) + '\n';
+  }
+  str += 'until ';
+  if (ast.test) {
+    str += 'not(' + codeFromAST(ast.test) + ')';
+  } else {
+    str += 'false';
+  }
+  str += '\n';
   return str;
 }
 
-export function processCallExpression(ast: CallExpression, str: string = ''): string {
+export function codeFromFunctionDeclaration(ast: FunctionDeclaration): string {
+  return codeFromFunctionExpression(ast as any);
+}
+
+export function codeFromFunctionExpression(ast: FunctionExpression): string {
+  return codeFromFunctionExpressionInternal(null, ast);
+}
+
+function codeFromFunctionExpressionInternal(funcName: string, ast: FunctionExpression): string {
+  let str = '';
+  if(!funcName) {
+    funcName = codeFromAST(ast.id);
+  }
+  if (funcName) {
+    if('constructor' == funcName) {
+      funcName = 'ctor';
+    }
+    let className = classQueue[classQueue.length - 1];
+    if (className) {
+      // 成员函数
+      str = 'function ' + className + '.prototype:' + funcName + '(';
+    } else {
+      // 普通函数
+      str = 'function ' + funcName + '(';
+    }
+  } else {
+    str = 'function(';
+  }
+  if (ast.params) {
+    for (let i = 0, len = ast.params.length; i < len; i++) {
+      if (i > 0) {
+        str += ', ';
+      }
+      str += codeFromAST(ast.params[i]);
+    }
+  }
+  str += ')\n';
+  if (ast.body) {
+    str += codeFromAST(ast.body) + '\n';
+  }
+  console.assert(!ast.generator, 'Not support generator yet!');
+  console.assert(!ast.async, 'Not support async yet!');
+  console.assert(!ast.expression, 'Not support expression yet!');
+  console.assert(!ast.typeParameters, 'Not support typeParameters yet!');
+  console.assert(!ast.declare, 'Not support declare yet!');
+  str += 'end\n';
   return str;
 }
 
-export function processCatchClause(ast: CatchClause, str: string = ''): string {
+export function codeFromIdentifier(ast: Identifier): string {
+  return ast.name;
+}
+
+export function codeFromIfStatement(ast: IfStatement): string {
+  let str = 'if ' + codeFromAST(ast.test) + ' then\n'
+  str += codeFromAST(ast.consequent) + '\n';
+  if (ast.alternate) {
+    str += 'else\n'
+    str += codeFromAST(ast.alternate) + '\n';
+  }
+  str += 'end\n';
   return str;
 }
 
-export function processClassBody(ast: ClassBody, str: string = ''): string {
-  return str;
+export function codeFromImport(ast: Import): string {
+  console.assert(false, 'Not support Import yet!');
+  return '';
 }
 
-export function processClassDeclaration(ast: ClassDeclaration, str: string = ''): string {
-  return str;
-}
-
-export function processClassExpression(ast: ClassExpression, str: string = ''): string {
-  return str;
-}
-
-export function processClassProperty(ast: ClassProperty, str: string = ''): string {
-  return str;
-}
-
-export function processConditionalExpression(ast: ConditionalExpression, str: string = ''): string {
-  return str;
-}
-
-export function processContinueStatement(ast: ContinueStatement, str: string = ''): string {
-  return str;
-}
-
-export function processDebuggerStatement(ast: DebuggerStatement, str: string = ''): string {
-  return str;
-}
-
-export function processDecorator(ast: Decorator, str: string = ''): string {
-  return str;
-}
-
-export function processDoWhileStatement(ast: DoWhileStatement, str: string = ''): string {
-  return str;
-}
-
-export function processEmptyStatement(ast: EmptyStatement, str: string = ''): string {
-  return str;
-}
-
-export function processExportAllDeclaration(ast: ExportAllDeclaration, str: string = ''): string {
-  return str;
-}
-
-export function processExportDefaultDeclaration(ast: ExportDefaultDeclaration, str: string = ''): string {
-  return str;
-}
-
-export function processExportNamedDeclaration(ast: ExportNamedDeclaration, str: string = ''): string {
-  return str;
-}
-
-export function processExportSpecifier(ast: ExportSpecifier, str: string = ''): string {
-  return str;
-}
-
-export function processExpressionStatement(ast: ExpressionStatement, str: string = ''): string {
-  return str;
-}
-
-export function processForInStatement(ast: ForInStatement, str: string = ''): string {
-  return str;
-}
-
-export function processForOfStatement(ast: ForOfStatement, str: string = ''): string {
-  return str;
-}
-
-export function processForStatement(ast: ForStatement, str: string = ''): string {
-  return str;
-}
-
-export function processFunctionDeclaration(ast: FunctionDeclaration, str: string = ''): string {
-  return str;
-}
-
-export function processFunctionExpression(ast: FunctionExpression, str: string = ''): string {
-  return str;
-}
-
-export function processIdentifier(ast: Identifier, str: string = ''): string {
-  return str;
-}
-
-export function processIfStatement(ast: IfStatement, str: string = ''): string {
-  return str;
-}
-
-export function processImport(ast: Import, str: string = ''): string {
-  return str;
-}
-
-export function processImportDeclaration(ast: ImportDeclaration, str: string = ''): string {
+export function codeFromImportDeclaration(ast: ImportDeclaration): string {
   let tmpl = `require({})
 `;
   return sf(tmpl, (ast.source as Literal).raw);
 }
 
-export function processImportDefaultSpecifier(ast: ImportDefaultSpecifier, str: string = ''): string {
+export function codeFromImportDefaultSpecifier(ast: ImportDefaultSpecifier): string {
+  console.assert(false, 'Not support ImportDefaultSpecifier yet!');
+  return '';
+}
+
+export function codeFromImportNamespaceSpecifier(ast: ImportNamespaceSpecifier): string {
+  console.assert(false, 'Not support ImportNamespaceSpecifier yet!');
+  return '';
+}
+
+export function codeFromImportSpecifier(ast: ImportSpecifier): string {
+  console.assert(false, 'Not support ImportSpecifier yet!');
+  return '';
+}
+
+export function codeFromLabeledStatement(ast: LabeledStatement): string {
+  console.assert(false, 'Not support LabeledStatement yet!');
+  return '';
+}
+
+export function codeFromLiteral(ast: Literal): string {
+  if (ast.regex) {
+    console.assert(false, 'Not support regex yet!');
+  }
+  return ast.raw;
+}
+
+export function codeFromLogicalExpression(ast: LogicalExpression): string {
+  let left = codeFromAST(ast.left);
+  if (calPriority(ast.left) >= calPriority(ast)) {
+    left = '(' + left + ')';
+  }
+  let right = codeFromAST(ast.right);
+  if (calPriority(ast.right) >= calPriority(ast)) {
+    right = '(' + right + ')';
+  }
+  let str = left + ast.operator + right;
   return str;
 }
 
-export function processImportNamespaceSpecifier(ast: ImportNamespaceSpecifier, str: string = ''): string {
-  return str;
-}
-
-export function processImportSpecifier(ast: ImportSpecifier, str: string = ''): string {
-  return str;
-}
-
-export function processLabeledStatement(ast: LabeledStatement, str: string = ''): string {
-  return str;
-}
-
-export function processLiteral(ast: Literal, str: string = ''): string {
-  return str;
-}
-
-export function processLogicalExpression(ast: LogicalExpression, str: string = ''): string {
-  return str;
-}
-
-export function processMemberExpression(ast: MemberExpression, str: string = ''): string {
-  return str;
-}
-
-export function processMetaProperty(ast: MetaProperty, str: string = ''): string {
-  return str;
-}
-
-export function processMethodDefinition(ast: MethodDefinition, str: string = ''): string {
-  return str;
-}
-
-export function processNewExpression(ast: NewExpression, str: string = ''): string {
-  return str;
-}
-
-export function processObjectExpression(ast: ObjectExpression, str: string = ''): string {
-  return str;
-}
-
-export function processObjectPattern(ast: ObjectPattern, str: string = ''): string {
-  return str;
-}
-
-export function processProgram(ast: Program, str: string = ''): string {
-  for(let i = 0, len = ast.body.length; i < len; i++) {
-    let stm = ast.body[i];
-    str = processAST(stm, str);
+export function codeFromMemberExpression(ast: MemberExpression): string {
+  let str = codeFromAST(ast.object);
+  if (noBraceTypes.indexOf(ast.object.type) < 0) {
+    str = '(' + str + ')';
+  }
+  if (ast.computed) {
+    str += '[' + codeFromAST(ast.property) + ']';
+  } else {
+    str += '.' + codeFromAST(ast.property);
   }
   return str;
 }
 
-export function processProperty(ast: Property, str: string = ''): string {
+export function codeFromMetaProperty(ast: MetaProperty): string {
+  console.assert(false, 'Not support MetaProperty yet!');
+  return '';
+}
+
+export function codeFromMethodDefinition(ast: MethodDefinition): string {
+  let funcName = null;
+  if (ast.key) {
+    funcName = codeFromAST(ast.key);
+  }
+  if(ast.value.type == "TSEmptyBodyFunctionExpression") {
+    console.assert(false, 'Not support TSEmptyBodyFunctionExpression yet!');
+  }
+  return codeFromFunctionExpressionInternal(funcName, ast.value as FunctionExpression);
+}
+
+export function codeFromNewExpression(ast: NewExpression): string {
+  let callee = codeFromAST(ast.callee);
+  if (calPriority(ast.callee) > calPriority(ast)) {
+    callee = '(' + callee + ')';
+  }
+  let str = callee + '(';
+  for (let i = 0, len = ast.arguments.length; i < len; i++) {
+    if (i > 0) {
+      str += ', ';
+    }
+    str += codeFromAST(ast.arguments[i]);
+  }
+  str += ')';
   return str;
 }
 
-export function processRestElement(ast: RestElement, str: string = ''): string {
+export function codeFromObjectExpression(ast: ObjectExpression): string {
+  var str = '{';
+  for (let i = 0, len = ast.properties.length; i < len; i++) {
+    if (i > 0) {
+      str += ', ';
+    }
+    str += codeFromAST(ast.properties[i]);
+  }
+  return str + '}';
+}
+
+export function codeFromObjectPattern(ast: ObjectPattern): string {
+  console.assert(false, 'Not support ObjectPattern yet!');
+  return '';
+}
+
+export function codeFromProgram(ast: Program): string {
+  let str = '';
+  for (let i = 0, len = ast.body.length; i < len; i++) {
+    let stm = ast.body[i];
+    str += codeFromAST(stm);
+  }
   return str;
 }
 
-export function processReturnStatement(ast: ReturnStatement, str: string = ''): string {
+export function codeFromProperty(ast: Property): string {
+  return codeFromAST(ast.key) + ':' + codeFromAST(ast.value);
+}
+
+export function codeFromRestElement(ast: RestElement): string {
+  console.assert(false, 'Not support RestElement yet!');
+  return '';
+}
+
+export function codeFromReturnStatement(ast: ReturnStatement): string {
+  return 'return ' + codeFromAST(ast.argument) + ';\n';
+}
+
+export function codeFromSequenceExpression(ast: SequenceExpression): string {
+  let str = '(';
+  for (var i = 0, len = ast.expressions.length; i < len; i++) {
+    if (i > 0) {
+      str += ', ';
+    }
+    str += codeFromAST(ast.expressions[i]);
+  }
+  return str + ')';
+}
+
+export function codeFromSpreadElement(ast: SpreadElement): string {
+  console.assert(false, 'Not support SpreadElement yet!');
+  return '';
+}
+
+export function codeFromSuper(ast: Super): string {
+  let className = classQueue[classQueue.length - 1];
+  return className + '.super';
+}
+
+export function codeFromSwitchCase(ast: SwitchCase): string {
+  let str = '';
+  if (ast.test) {
+    str += '[' + codeFromAST(ast.test) + '] = function()\n';
+  } else {
+    str += '["default"] = function()\n';
+  }
+  for (let i = 0, len = ast.consequent.length; i < len; i++) {
+    str += codeFromAST(ast.consequent[i]) + '\n';
+  }
+  str += 'end\n';
   return str;
 }
 
-export function processSequenceExpression(ast: SequenceExpression, str: string = ''): string {
+export function codeFromSwitchStatement(ast: SwitchStatement): string {
+  let str = 'local switch = {\n'
+  for (let i = 0, len = ast.cases.length; i < len; i++) {
+    if (i > 0) {
+      str += ',\n';
+    }
+    str += codeFromSwitchCase(ast.cases[i]);
+  }
+  str += '}\n';
+  str += 'local casef = switch[' + codeFromAST(ast.discriminant) + ']\n';
+  str += 'if not casef then\n';
+  str += 'casef = switch["default"]\n';
+  str += 'end\n';
+  str += 'casef()\n';
+  str += 'end\n'
   return str;
 }
 
-export function processSpreadElement(ast: SpreadElement, str: string = ''): string {
+export function codeFromTaggedTemplateExpression(ast: TaggedTemplateExpression): string {
+  console.assert(false, 'Not support TaggedTemplateExpression yet!');
+  return '';
+}
+
+export function codeFromTemplateElement(ast: TemplateElement): string {
+  console.assert(false, 'Not support TemplateElement yet!');
+  return '';
+}
+
+export function codeFromTemplateLiteral(ast: TemplateLiteral): string {
+  console.assert(false, 'Not support TemplateLiteral yet!');
+  return '';
+}
+
+export function codeFromThisExpression(ast: ThisExpression): string {
+  return 'self';
+}
+
+export function codeFromThrowStatement(ast: ThrowStatement): string {
+  return 'error(' + codeFromAST(ast.argument) + ')\n';
+}
+
+export function codeFromTryStatement(ast: TryStatement): string {
+  console.assert(false, 'Not support codeFromTryStatement yet!');
+  return '';
+}
+
+export function codeFromUnaryExpression(ast: UnaryExpression): string {
+  let str;
+  let agm = codeFromAST(ast.argument);
+  if (calPriority(ast.argument) >= calPriority(ast)) {
+    agm = '(' + agm + ')';
+  }
+  if (ast.prefix) {
+    if ('typeof' == ast.operator) {
+      str = 'type(' + agm + ')';
+    } else if ('delete' == ast.operator) {
+      str = agm + ' = nil';
+    } else if ('void' == ast.operator) {
+      console.assert(false, 'Not support void yet!');
+    } else {
+      console.assert(false, 'Not support UnaryOperator: ' + ast.operator);
+      str = ast.operator + agm;
+    }
+  } else {
+    str = agm + ast.operator;
+  }
   return str;
 }
 
-export function processSuper(ast: Super, str: string = ''): string {
+export function codeFromUpdateExpression(ast: UpdateExpression): string {
+  console.assert(false, 'Not support UpdateExpression yet');
+  let str = codeFromAST(ast.argument);
+  if (calPriority(ast.argument) >= calPriority(ast)) {
+    str = '(' + str + ')';
+  }
+  if (ast.prefix) {
+    str = ast.operator + str;
+  } else {
+    str = str + ast.operator;
+  }
   return str;
 }
 
-export function processSwitchCase(ast: SwitchCase, str: string = ''): string {
+export function codeFromVariableDeclaration(ast: VariableDeclaration): string {
+  // not support const
+  let str = '';
+  for (let i = 0, len = ast.declarations.length; i < len; i++) {
+    // TODO: no local in for statement
+    str += 'local ' + codeFromVariableDeclarator(ast.declarations[i]) + '\n';
+  }
   return str;
 }
 
-export function processSwitchStatement(ast: SwitchStatement, str: string = ''): string {
+export function codeFromVariableDeclarator(ast: VariableDeclarator): string {
+  let str = codeFromAST(ast.id);
+  if (ast.init) {
+    str += '=' + codeFromAST(ast.init);
+  } else {
+    console.assert(false, 'Not support VariableDeclarator without init yet');
+  }
   return str;
 }
 
-export function processTaggedTemplateExpression(ast: TaggedTemplateExpression, str: string = ''): string {
+export function codeFromWhileStatement(ast: WhileStatement): string {
+  let str = 'while(' + codeFromAST(ast.test) + ')\n';
+  str += 'do\n';
+  let bodyCode = codeFromAST(ast.body);
+  str += bodyCode + '\n';
+  str += 'end\n'
   return str;
 }
 
-export function processTemplateElement(ast: TemplateElement, str: string = ''): string {
+export function codeFromWithStatement(ast: WithStatement): string {
+  console.assert(false, 'Not support WithStatement yet');
+  return '';
+}
+
+export function codeFromYieldExpression(ast: YieldExpression): string {
+  let str = 'coroutine.yield(';
+  str += codeFromAST(ast.argument);
+  str += ')';
   return str;
 }
 
-export function processTemplateLiteral(ast: TemplateLiteral, str: string = ''): string {
-  return str;
+export function codeFromTSEnumDeclaration(ast: TSEnumDeclaration): string {
+  console.assert(false, 'Not support TSEnumDeclaration yet');
+  return '';
 }
 
-export function processThisExpression(ast: ThisExpression, str: string = ''): string {
-  return str;
+function pintHit(ast: any): void {
+  console.warn('hit %s!', ast.type);
+  console.log(util.inspect(ast, true, 4));
 }
-
-export function processThrowStatement(ast: ThrowStatement, str: string = ''): string {
-  return str;
-}
-
-export function processTryStatement(ast: TryStatement, str: string = ''): string {
-  return str;
-}
-
-export function processUnaryExpression(ast: UnaryExpression, str: string = ''): string {
-  return str;
-}
-
-export function processUpdateExpression(ast: UpdateExpression, str: string = ''): string {
-  return str;
-}
-
-export function processVariableDeclaration(ast: VariableDeclaration, str: string = ''): string {
-  return str;
-}
-
-export function processVariableDeclarator(ast: VariableDeclarator, str: string = ''): string {
-  return str;
-}
-
-export function processWhileStatement(ast: WhileStatement, str: string = ''): string {
-  return str;
-}
-
-export function processWithStatement(ast: WithStatement, str: string = ''): string {
-  return str;
-}
-
-export function processYieldExpression(ast: YieldExpression, str: string = ''): string {
-  return str;
-}
-
-export function processTSEnumDeclaration(ast: TSEnumDeclaration, str: string = ''): string {
-  return str;
-}
-

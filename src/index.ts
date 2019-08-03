@@ -6,7 +6,8 @@ import parser = require('@typescript-eslint/typescript-estree');
 import * as lm from './gen/LuaMaker';
 
 const args = process.argv.splice(2);
-const inputFolder = 'G:\\ly\\trunk\\TsScripts\\Diff\\view';
+// const inputFolder = 'G:\\ly\\trunk\\TsScripts\\Diff\\view';
+const inputFolder = 'test\\in';
 const outputFolder = 'test\\out';
 
 readDir(inputFolder);
@@ -34,9 +35,9 @@ async function translate(filePath: string) {
   const parsed = await parser.parse(fileContent);
   // const parsed = await parser.parseSource('let a = 123, b =456;');
   let str = util.inspect(parsed, true, 10);
-  fs.writeFileSync(sf('{}\\tt.txt', outputFolder), str);
+  fs.writeFileSync(filePath.replace(inputFolder, outputFolder).replace(/\.ts$/, '.txt'), str);
 
-  let luaContent = lm.processProgram(parsed);
+  let luaContent = lm.toLua(parsed);
   let luaFilePath = filePath.replace(inputFolder, outputFolder).replace(/\.ts$/, '.lua');
   fs.writeFileSync(luaFilePath, luaContent);
 }
