@@ -136,6 +136,7 @@ export function toLua(ast: any): string {
     content = 'require("class")\n' + content;
   }
   content = content.replace(/console[\.|:]log/g, 'print');
+  content = formatTip(content);
   return content;
 }
 
@@ -839,16 +840,28 @@ export function codeFromMemberExpression(ast: MemberExpression): string {
     str = '(' + str + ')';
   }
   if (ast.computed) {
-    str += '[' + codeFromAST(ast.property) + ']';
-  } else {
-    // TODO: do something with static members
-    let parent = (ast as any).__parent;
-    if(parent && parent.type == AST_NODE_TYPES.CallExpression) {
-      str += ':';
+    let propertyStr = codeFromAST(ast.property);
+    if(propertyStr.length == 1) {
+      // Auto modify xx[i] to xx[i + 1]
+      propertyStr += '+1';
     } else {
-      str += '.';
+      // Add some tips
+      propertyStr += wrapTip(str + '下标访问可能不正确');
     }
-    str += codeFromAST(ast.property);
+    str += '[' + propertyStr + ']';
+  } else {
+    if(ast.property.type == AST_NODE_TYPES.Identifier && ast.property.name == 'length') {
+      str = '#' + str;
+    } else {
+      // TODO: do something with static members
+      let parent = (ast as any).__parent;
+      if(parent && parent.type == AST_NODE_TYPES.CallExpression) {
+        str += ':';
+      } else {
+        str += '.';
+      }
+      str += codeFromAST(ast.property);
+    }
   }
   return str;
 }
@@ -1119,4 +1132,33 @@ function indent(str: string): string {
 function pintHit(ast: any): void {
   console.warn('hit %s!', ast.type);
   console.log(util.inspect(ast, true, 4));
+}
+
+function wrapTip(rawTip: string): string {
+  return '<TT>[ts2lua]' + rawTip + '</TT>';
+}
+
+function formatTip(content: string): string {
+  let re = /<TT>.*?<\/TT>/;
+  let rema = content.match(re);
+  while(rema) {
+    let rawComment = rema[0];
+    let rawCommentLen = rawComment.length;
+    let preContent = content.substr(0, rema.index);
+    let postContent = content.substr(rema.index + rawCommentLen);
+    let luaComment = '-- ' + rawComment.substr(4, rawCommentLen - 9);
+    let lastNewLineIdx = preContent.lastIndexOf('\n');
+    if(lastNewLineIdx) {
+      let tmpStr = preContent.substr(lastNewLineIdx + 1);
+      let blanksRema = tmpStr.match(/^ */);
+      if(blanksRema) {
+        luaComment = blanksRema[0] + luaComment;
+      }
+      content = preContent.substr(0, lastNewLineIdx) + '\n' + luaComment + '\n' + tmpStr + postContent;
+    } else {
+      content = luaComment + '\n' + preContent + postContent;
+    }
+    rema = content.match(re);
+  }
+  return content;
 }

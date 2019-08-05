@@ -122,6 +122,7 @@ function toLua(ast) {
         content = 'require("class")\n' + content;
     }
     content = content.replace(/console[\.|:]log/g, 'print');
+    content = formatTip(content);
     return content;
 }
 exports.toLua = toLua;
@@ -754,18 +755,32 @@ function codeFromMemberExpression(ast) {
         str = '(' + str + ')';
     }
     if (ast.computed) {
-        str += '[' + codeFromAST(ast.property) + ']';
-    }
-    else {
-        // TODO: do something with static members
-        var parent_1 = ast.__parent;
-        if (parent_1 && parent_1.type == typescript_estree_1.AST_NODE_TYPES.CallExpression) {
-            str += ':';
+        var propertyStr = codeFromAST(ast.property);
+        if (propertyStr.length == 1) {
+            // Auto modify xx[i] to xx[i + 1]
+            propertyStr += '+1';
         }
         else {
-            str += '.';
+            // Add some tips
+            propertyStr += wrapTip(str + '下标访问可能不正确');
         }
-        str += codeFromAST(ast.property);
+        str += '[' + propertyStr + ']';
+    }
+    else {
+        if (ast.property.type == typescript_estree_1.AST_NODE_TYPES.Identifier && ast.property.name == 'length') {
+            str = '#' + str;
+        }
+        else {
+            // TODO: do something with static members
+            var parent_1 = ast.__parent;
+            if (parent_1 && parent_1.type == typescript_estree_1.AST_NODE_TYPES.CallExpression) {
+                str += ':';
+            }
+            else {
+                str += '.';
+            }
+            str += codeFromAST(ast.property);
+        }
     }
     return str;
 }
@@ -1041,4 +1056,32 @@ function indent(str) {
 function pintHit(ast) {
     console.warn('hit %s!', ast.type);
     console.log(util.inspect(ast, true, 4));
+}
+function wrapTip(rawTip) {
+    return '<TT>[ts2lua]' + rawTip + '</TT>';
+}
+function formatTip(content) {
+    var re = /<TT>.*?<\/TT>/;
+    var rema = content.match(re);
+    while (rema) {
+        var rawComment = rema[0];
+        var rawCommentLen = rawComment.length;
+        var preContent = content.substr(0, rema.index);
+        var postContent = content.substr(rema.index + rawCommentLen);
+        var luaComment = '-- ' + rawComment.substr(4, rawCommentLen - 9);
+        var lastNewLineIdx = preContent.lastIndexOf('\n');
+        if (lastNewLineIdx) {
+            var tmpStr = preContent.substr(lastNewLineIdx + 1);
+            var blanksRema = tmpStr.match(/^ */);
+            if (blanksRema) {
+                luaComment = blanksRema[0] + luaComment;
+            }
+            content = preContent.substr(0, lastNewLineIdx) + '\n' + luaComment + '\n' + tmpStr + postContent;
+        }
+        else {
+            content = luaComment + '\n' + preContent + postContent;
+        }
+        rema = content.match(re);
+    }
+    return content;
 }
