@@ -1,13 +1,15 @@
-import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration, BindingName } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
+import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration, BindingName, TSAsExpression, TSInterfaceDeclaration, TSTypeAssertion, TSModuleDeclaration, TSModuleBlock, TSDeclareFunction, TSAbstractMethodDefinition } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
 import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree';
 import sf = require('string-format');
 import util = require('util')
 
-let blockDeep = 0;
-let allClasses: string[] = [];
-let classQueue: string[] = [];
-
 const noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier];
+
+// TODO: Typeof's return value may be different between ts and lua
+const tsType2luaType = {
+  'undefined': 'nil',
+  'object': 'table'
+};
 
 let pv = 0;
 const operatorPriorityMap: { [opt: string]: number } = {};
@@ -127,16 +129,28 @@ function calPriority(ast: any) {
   return ast.__calPriority;
 }
 
+let importContents: string[] = [];
+let allClasses: string[] = [];
+let classQueue: string[] = [];
+let moduleQueue: string[] = [];
+let hasContinue = false;
+
 export function toLua(ast: any): string {
-  blockDeep = 0;
+  importContents.length = 0;
   allClasses.length = 0;
   classQueue.length = 0;
   let content = codeFromAST(ast);
-  if(allClasses.length > 0) {
-    content = 'require("class")\n' + content;
-  }
   content = content.replace(/console[\.|:]log/g, 'print');
   content = formatTip(content);
+  if(allClasses.length > 0) {
+    importContents.push('class');
+  }
+  importContents.sort();
+  let importStr = '';
+  for(let p of importContents) {
+    importStr += 'require("' + p + '")\n';
+  }
+  content = importStr + content;
   return content;
 }
 
@@ -424,8 +438,36 @@ export function codeFromAST(ast: any): string {
       str += codeFromYieldExpression(ast);
       break;
 
+    case AST_NODE_TYPES.TSAbstractMethodDefinition:
+      str += codeFromTSAbstractMethodDefinition(ast);
+      break;
+
+    case AST_NODE_TYPES.TSAsExpression:
+      str += codeFromTSAsExpression(ast);
+      break;
+
+    case AST_NODE_TYPES.TSDeclareFunction:
+      str += codeFromTSDeclareFunction(ast);
+      break;
+
     case AST_NODE_TYPES.TSEnumDeclaration:
       str += codeFromTSEnumDeclaration(ast);
+      break;
+
+    case AST_NODE_TYPES.TSModuleBlock:
+      str += codeFromTSModuleBlock(ast);
+      break;
+
+    case AST_NODE_TYPES.TSModuleDeclaration:
+      str += codeFromTSModuleDeclaration(ast);
+      break;
+
+    case AST_NODE_TYPES.TSInterfaceDeclaration:
+      str += codeFromTSInterfaceDeclaration(ast);
+      break;
+
+    case AST_NODE_TYPES.TSTypeAssertion:
+      str += codeFromTSTypeAssertion(ast);
       break;
 
     default:
@@ -449,13 +491,43 @@ export function codeFromArrayExpression(ast: ArrayExpression): string {
 }
 
 export function codeFromArrayPattern(ast: ArrayPattern): string {
-  console.assert(false, 'Not support ArrayPattern yet!');
+  assert(false, ast, 'Not support ArrayPattern yet!');
   return '';
 }
 
 export function codeFromArrowFunctionExpression(ast: ArrowFunctionExpression): string {
-  console.assert(false, 'Not support ArrowFunctionExpression yet!');
-  return '';
+  let str = 'function(';
+  let defaultParamsStr = '';
+  if (ast.params) {
+    for (let i = 0, len = ast.params.length; i < len; i++) {
+      if (i > 0) {
+        str += ', ';
+      }
+      let oneParam = ast.params[i];
+      (oneParam as any).__parent = ast;
+      str += codeFromAST(oneParam);
+
+      if(oneParam.type == AST_NODE_TYPES.AssignmentPattern) {
+        let paramIdStr = codeFromAST(oneParam.left);
+        defaultParamsStr += 'if ' + paramIdStr + ' == nil then\n';
+        defaultParamsStr += indent(paramIdStr + '=' + codeFromAST(oneParam.right)) + '\n';
+        defaultParamsStr += 'end\n';
+      }
+    }
+  }
+  str += ')\n';
+  if (ast.body) {
+    let bodyStr = codeFromAST(ast.body);
+    if(defaultParamsStr) {
+      bodyStr = defaultParamsStr + bodyStr;
+    }
+    str += indent(bodyStr) + '\n';
+  }
+  assert(!ast.generator, ast, 'Not support generator yet!');
+  assert(!ast.async, ast, 'Not support async yet!');
+  assert(!ast.expression, ast, 'Not support expression yet!');
+  str += 'end\n';
+  return str;
 }
 
 export function codeFromAssignmentExpression(ast: AssignmentExpression): string {
@@ -472,7 +544,7 @@ export function codeFromAssignmentPattern(ast: AssignmentPattern): string {
 }
 
 export function codeFromAwaitExpression(ast: AwaitExpression): string {
-  console.assert(false, 'Not support AwaitExpression yet!');
+  assert(false, ast, 'Not support AwaitExpression yet!');
   return '';
 }
 
@@ -485,26 +557,33 @@ export function codeFromBinaryExpression(ast: BinaryExpression): string {
   // TODO: Take care of string combination
   let left = codeFromAST(ast.left);
   let right = codeFromAST(ast.right);
-  if(ast.operator == '+' && ((ast.left as any).__isString || (ast.right as any).__isString)) {
-    optStr = '..';
-    (ast.left as any).__isString = true;
+  if(ast.operator == '+') {
+    if(((ast.left as any).__isString || (ast.right as any).__isString)) {
+      optStr = '..';
+      (ast.left as any).__isString = true;
+    }
+  } else if(ast.operator = '!=') {
+    optStr = '~='
   }
-  return left + optStr + right;
+  return left + ' ' + optStr + ' ' + right;
 }
 
 export function codeFromBlockStatement(ast: BlockStatement): string {
   let str = '';
   for (let i = 0, len = ast.body.length; i < len; i++) {
-    if (i > 0) {
-      str += '\n';
+    let bstr = codeFromAST(ast.body[i]);
+    if(bstr) {
+      if (i > 0) {
+        str += '\n';
+      }
+      str += bstr;
     }
-    str += codeFromAST(ast.body[i]);
   }
   return str;
 }
 
 export function codeFromBreakStatement(ast: BreakStatement): string {
-  console.assert(!ast.label, 'Not support break label yet!')
+  assert(!ast.label, ast, 'Not support break label yet!')
   return 'break';
 }
 
@@ -532,10 +611,13 @@ export function codeFromCatchClause(ast: CatchClause): string {
 export function codeFromClassBody(ast: ClassBody): string {
   let str = '';
   for (let i = 0, len = ast.body.length; i < len; i++) {
-    if (i > 0) {
-      str += '\n';
+    let cbodyStr = codeFromAST(ast.body[i]);
+    if(cbodyStr) {
+      if (i > 0) {
+        str += '\n';
+      }
+      str += cbodyStr;
     }
-    str += codeFromAST(ast.body[i]);
   }
   return str;
 }
@@ -555,7 +637,7 @@ export function codeFromClassDeclaration(ast: ClassDeclaration): string {
     classQueue.push(className);
     str = str.replace('$ClassName$', className);
   } else {
-    console.assert(false, 'Class name is necessary!');
+    assert(false, ast, 'Class name is necessary!');
   }
   str += codeFromClassBody(ast.body);
   if (ast.superClass) {
@@ -571,11 +653,11 @@ export function codeFromClassDeclaration(ast: ClassDeclaration): string {
   // }
   if (ast.declare) {
     // boolean
-    console.assert(false);
+    assert(false, ast);
   }
   if (ast.decorators) {
     // Decorator[];
-    console.assert(false);
+    assert(false, ast);
   }
   classQueue.pop();
   return str;
@@ -618,46 +700,45 @@ export function codeFromConditionalExpression(ast: ConditionalExpression): strin
 }
 
 export function codeFromContinueStatement(ast: ContinueStatement): string {
-  console.assert(false, 'Not support ContinueStatement yet!');
-  return '';
+  hasContinue = true;
+  return 'break';
 }
 
 export function codeFromDebuggerStatement(ast: DebuggerStatement): string {
-  console.assert(false, 'Not support DebuggerStatement yet!');
+  assert(false, ast, 'Not support DebuggerStatement yet!');
   return '';
 }
 
 export function codeFromDecorator(ast: Decorator): string {
-  console.assert(false, 'Not support Decorator yet!');
+  assert(false, ast, 'Not support Decorator yet!');
   return '';
 }
 
 export function codeFromDoWhileStatement(ast: DoWhileStatement): string {
-  console.assert(false, 'Not support DoWhileStatement yet!');
+  assert(false, ast, 'Not support DoWhileStatement yet!');
   return '';
 }
 
 export function codeFromEmptyStatement(ast: EmptyStatement): string {
-  console.assert(false, 'Not support EmptyStatement yet!');
   return '';
 }
 
 export function codeFromExportAllDeclaration(ast: ExportAllDeclaration): string {
-  console.assert(false, 'Not support ExportAllDeclaration yet!');
+  assert(false, ast, 'Not support ExportAllDeclaration yet!');
   return '';
 }
 
 export function codeFromExportDefaultDeclaration(ast: ExportDefaultDeclaration): string {
-  console.assert(false, 'Not support ExportDefaultDeclaration yet!');
   return '';
 }
 
 export function codeFromExportNamedDeclaration(ast: ExportNamedDeclaration): string {
+  (ast.declaration as any).__exported = true;
   return codeFromAST(ast.declaration);
 }
 
 export function codeFromExportSpecifier(ast: ExportSpecifier): string {
-  console.assert(false, 'Not support ExportSpecifier yet!');
+  assert(false, ast, 'Not support ExportSpecifier yet!');
   return '';
 }
 
@@ -668,24 +749,29 @@ export function codeFromExpressionStatement(ast: ExpressionStatement): string {
 export function codeFromForInStatement(ast: ForInStatement): string {
   let str = 'for ' + codeFromAST(ast.left) + ' in pairs(' + codeFromAST(ast.right) + ') do\n';
   str += codeFromAST(ast.body) + '\n';
-  str += 'end\n';
+  str += 'end';
   return str;
 }
 
 export function codeFromForOfStatement(ast: ForOfStatement): string {
   let str = 'for _tmpi, ' + codeFromAST(ast.left) + ' in pairs(' + codeFromAST(ast.right) + ') do\n';
   str += codeFromAST(ast.body) + '\n';
-  str += 'end\n';
+  str += 'end';
   return str;
 }
 
 export function codeFromForStatement(ast: ForStatement): string {
+  hasContinue = false;
+
   let str = '';
   if (ast.init) {
     str += codeFromAST(ast.init) + '\n';
   }
   str += 'repeat\n';
   let repeatBodyStr = codeFromAST(ast.body);
+  if(hasContinue) {
+    repeatBodyStr = 'repeat\n' + indent(repeatBodyStr + '\nbreak') + '\nuntil true'
+  }
   if (ast.update) {
     repeatBodyStr += '\n';
     repeatBodyStr += codeFromAST(ast.update);
@@ -710,7 +796,7 @@ export function codeFromFunctionExpression(ast: FunctionExpression): string {
 
 function codeFromFunctionExpressionInternal(funcName: string, ast: FunctionExpression): string {
   let str = '';
-  if(!funcName) {
+  if(!funcName && ast.id) {
     funcName = codeFromAST(ast.id);
   }
   if (funcName) {
@@ -722,8 +808,14 @@ function codeFromFunctionExpressionInternal(funcName: string, ast: FunctionExpre
       // 成员函数
       str = 'function ' + className + '.prototype:' + funcName + '(';
     } else {
-      // 普通函数
-      str = 'function ' + funcName + '(';
+      let moduleName = moduleQueue[moduleQueue.length - 1];
+      if(moduleName) {
+        // 模块函数
+        str = 'function ' + moduleName + ':' + funcName + '(';
+      } else {
+        // 普通函数
+        str = 'function ' + funcName + '(';
+      }
     }
   } else {
     str = 'function(';
@@ -748,19 +840,16 @@ function codeFromFunctionExpressionInternal(funcName: string, ast: FunctionExpre
   }
   str += ')\n';
   if (ast.body) {
-    blockDeep++;
     let bodyStr = codeFromAST(ast.body);
     if(defaultParamsStr) {
       bodyStr = defaultParamsStr + bodyStr;
     }
     str += indent(bodyStr) + '\n';
-    blockDeep--;
   }
-  console.assert(!ast.generator, 'Not support generator yet!');
-  console.assert(!ast.async, 'Not support async yet!');
-  console.assert(!ast.expression, 'Not support expression yet!');
-  console.assert(!ast.typeParameters, 'Not support typeParameters yet!');
-  console.assert(!ast.declare, 'Not support declare yet!');
+  assert(!ast.generator, ast, 'Not support generator yet!');
+  assert(!ast.async, ast, 'Not support async yet!');
+  assert(!ast.expression, ast, 'Not support expression yet!');
+  assert(!ast.declare, ast, 'Not support declare yet!');
   str += 'end\n';
   return str;
 }
@@ -776,49 +865,55 @@ export function codeFromIfStatement(ast: IfStatement): string {
     str += 'else\n'
     str += indent(codeFromAST(ast.alternate) + '\n');
   }
-  str += 'end\n';
+  str += 'end';
   return str;
 }
 
 export function codeFromImport(ast: Import): string {
-  console.assert(false, 'Not support Import yet!');
+  assert(false, ast, 'Not support Import yet!');
   return '';
 }
 
 export function codeFromImportDeclaration(ast: ImportDeclaration): string {
-  let tmpl = `require({})
-`;
-  return sf(tmpl, (ast.source as Literal).raw);
+  let p = (ast.source as Literal).value as string;
+  if(importContents.indexOf(p) < 0) {
+    importContents.push(p);
+  }
+  return '';
 }
 
 export function codeFromImportDefaultSpecifier(ast: ImportDefaultSpecifier): string {
-  console.assert(false, 'Not support ImportDefaultSpecifier yet!');
+  assert(false, ast, 'Not support ImportDefaultSpecifier yet!');
   return '';
 }
 
 export function codeFromImportNamespaceSpecifier(ast: ImportNamespaceSpecifier): string {
-  console.assert(false, 'Not support ImportNamespaceSpecifier yet!');
+  assert(false, ast, 'Not support ImportNamespaceSpecifier yet!');
   return '';
 }
 
 export function codeFromImportSpecifier(ast: ImportSpecifier): string {
-  console.assert(false, 'Not support ImportSpecifier yet!');
+  assert(false, ast, 'Not support ImportSpecifier yet!');
   return '';
 }
 
 export function codeFromLabeledStatement(ast: LabeledStatement): string {
-  console.assert(false, 'Not support LabeledStatement yet!');
+  assert(false, ast, 'Not support LabeledStatement yet!');
   return '';
 }
 
 export function codeFromLiteral(ast: Literal): string {
   if (ast.regex) {
-    console.assert(false, 'Not support regex yet!');
+    return ast.raw + wrapTip('tslua无法自动转换正则表达式，请手动处理。');
   }
   if(typeof(ast.value) == 'string') {
     (ast as any).__isString = true;
   }
-  return ast.raw;
+  let l = ast.raw;
+  if(null === ast.value) {
+    l = 'nil';
+  }
+  return l;
 }
 
 export function codeFromLogicalExpression(ast: LogicalExpression): string {
@@ -867,7 +962,7 @@ export function codeFromMemberExpression(ast: MemberExpression): string {
 }
 
 export function codeFromMetaProperty(ast: MetaProperty): string {
-  console.assert(false, 'Not support MetaProperty yet!');
+  assert(false, ast, 'Not support MetaProperty yet!');
   return '';
 }
 
@@ -877,7 +972,7 @@ export function codeFromMethodDefinition(ast: MethodDefinition): string {
     funcName = codeFromAST(ast.key);
   }
   if(ast.value.type == "TSEmptyBodyFunctionExpression") {
-    console.assert(false, 'Not support TSEmptyBodyFunctionExpression yet!');
+    assert(false, ast, 'Not support TSEmptyBodyFunctionExpression yet!');
   }
   return codeFromFunctionExpressionInternal(funcName, ast.value as FunctionExpression);
 }
@@ -910,20 +1005,21 @@ export function codeFromObjectExpression(ast: ObjectExpression): string {
 }
 
 export function codeFromObjectPattern(ast: ObjectPattern): string {
-  console.assert(false, 'Not support ObjectPattern yet!');
+  assert(false, ast, 'Not support ObjectPattern yet!');
   return '';
 }
 
 export function codeFromProgram(ast: Program): string {
   let str = '';
   for (let i = 0, len = ast.body.length; i < len; i++) {
-    if(i > 0) {
-      str += '\n';
-      str += '--分割线\n';
-      str += '\n';
-    }
     let stm = ast.body[i];
-    str += codeFromAST(stm);
+    let bodyStr = codeFromAST(stm);
+    if(bodyStr) {
+      if(i > 0) {
+        str += '\n';
+      }
+      str += bodyStr;
+    }
   }
   return str;
 }
@@ -933,11 +1029,13 @@ export function codeFromProperty(ast: Property): string {
 }
 
 export function codeFromRestElement(ast: RestElement): string {
-  console.assert(false, 'Not support RestElement yet!');
-  return '';
+  return '...';
 }
 
 export function codeFromReturnStatement(ast: ReturnStatement): string {
+  if(!ast.argument) {
+    return 'return';
+  }
   return 'return ' + codeFromAST(ast.argument);
 }
 
@@ -953,8 +1051,7 @@ export function codeFromSequenceExpression(ast: SequenceExpression): string {
 }
 
 export function codeFromSpreadElement(ast: SpreadElement): string {
-  console.assert(false, 'Not support SpreadElement yet!');
-  return '';
+  return '...';
 }
 
 export function codeFromSuper(ast: Super): string {
@@ -972,7 +1069,7 @@ export function codeFromSwitchCase(ast: SwitchCase): string {
   for (let i = 0, len = ast.consequent.length; i < len; i++) {
     str += codeFromAST(ast.consequent[i]) + '\n';
   }
-  str += 'end\n';
+  str += 'end';
   return str;
 }
 
@@ -995,17 +1092,17 @@ export function codeFromSwitchStatement(ast: SwitchStatement): string {
 }
 
 export function codeFromTaggedTemplateExpression(ast: TaggedTemplateExpression): string {
-  console.assert(false, 'Not support TaggedTemplateExpression yet!');
+  assert(false, ast, 'Not support TaggedTemplateExpression yet!');
   return '';
 }
 
 export function codeFromTemplateElement(ast: TemplateElement): string {
-  console.assert(false, 'Not support TemplateElement yet!');
+  assert(false, ast, 'Not support TemplateElement yet!');
   return '';
 }
 
 export function codeFromTemplateLiteral(ast: TemplateLiteral): string {
-  console.assert(false, 'Not support TemplateLiteral yet!');
+  assert(false, ast, 'Not support TemplateLiteral yet!');
   return '';
 }
 
@@ -1018,8 +1115,24 @@ export function codeFromThrowStatement(ast: ThrowStatement): string {
 }
 
 export function codeFromTryStatement(ast: TryStatement): string {
-  console.assert(false, 'Not support codeFromTryStatement yet!');
-  return '';
+  importContents.push('trycatch');
+  let str = 'try_catch{\n';
+  let tcStr = 'main = function()\n';
+  tcStr += indent(codeFromAST(ast.block));
+  tcStr += 'end,\n';
+  if(ast.handler) {
+    tcStr += 'catch = function()\n';
+    tcStr += indent(codeFromAST(ast.handler));
+    tcStr += 'end,\n'
+  }
+  if(ast.finalizer) {
+    tcStr += 'finally = function()\n';
+    tcStr += indent(codeFromAST(ast.finalizer));
+    tcStr += 'end\n'
+  }
+  str += indent(tcStr);
+  str += '}';
+  return str;
 }
 
 export function codeFromUnaryExpression(ast: UnaryExpression): string {
@@ -1033,10 +1146,12 @@ export function codeFromUnaryExpression(ast: UnaryExpression): string {
       str = 'type(' + agm + ')';
     } else if ('delete' == ast.operator) {
       str = agm + ' = nil';
+    } else if ('!' == ast.operator) {
+      str = 'not ' + agm;
     } else if ('void' == ast.operator) {
-      console.assert(false, 'Not support void yet!');
+      assert(false, ast, 'Not support void yet!');
     } else {
-      console.assert(false, 'Not support UnaryOperator: ' + ast.operator);
+      assert('-' == ast.operator, 'Not support UnaryOperator: ' + ast.operator);
       str = ast.operator + agm;
     }
   } else {
@@ -1074,12 +1189,11 @@ export function codeFromVariableDeclaration(ast: VariableDeclaration): string {
 }
 
 export function codeFromVariableDeclarator(ast: VariableDeclarator): string {
-  let str = codeFromAST(ast.id);
+  let str = '';
   if (ast.init) {
+    str += codeFromAST(ast.id)
     str += '=' + codeFromAST(ast.init);
-  } else {
-    console.assert(false, 'Not support VariableDeclarator without init yet');
-  }
+  } 
   return str;
 }
 
@@ -1093,7 +1207,7 @@ export function codeFromWhileStatement(ast: WhileStatement): string {
 }
 
 export function codeFromWithStatement(ast: WithStatement): string {
-  console.assert(false, 'Not support WithStatement yet');
+  assert(false, ast, 'Not support WithStatement yet');
   return '';
 }
 
@@ -1104,9 +1218,80 @@ export function codeFromYieldExpression(ast: YieldExpression): string {
   return str;
 }
 
+export function codeFromTSAbstractMethodDefinition(ast: TSAbstractMethodDefinition): string {
+  return codeFromMethodDefinition(ast as any);
+}
+
+export function codeFromTSAsExpression(ast: TSAsExpression): string {
+  return codeFromAST(ast.expression);
+}
+
+export function codeFromTSDeclareFunction(ast: TSDeclareFunction): string {
+  return wrapTip('请手动处理DeclareFunction');
+}
+
 export function codeFromTSEnumDeclaration(ast: TSEnumDeclaration): string {
-  console.assert(false, 'Not support TSEnumDeclaration yet');
+  let str = '';
+  if(!(ast as any).__exported) {
+    str += 'local ';
+  }
+  str += codeFromAST(ast.id) + ' = {\n';
+  let membersStr = '';
+  let nextValue = 0;
+  for(let i = 0, len = ast.members.length; i < len; i++) {
+    if(i > 0) {
+      membersStr += ',\n';
+    }
+    let m = ast.members[i];
+    membersStr += codeFromAST(m.id) + ' = ';
+    if(m.initializer) {
+      membersStr += codeFromAST(m.initializer)
+      nextValue = ((m.initializer as Literal).value as number) + 1;
+    } else {
+      membersStr += nextValue;
+      nextValue++;
+    }
+  }
+  str += indent(membersStr) + '\n';
+  str += '}';
+  assert(!ast.const, ast);
+  assert(!ast.declare, ast);
+  assert(!ast.modifiers, ast);
+  assert(!ast.decorators, ast);
+  return str;
+}
+
+export function codeFromTSModuleBlock(ast: TSModuleBlock): string {
+  let str = '';
+  for(let i = 0, len = ast.body.length; i < len; i++) {
+    let bstr = codeFromAST(ast.body[i]);
+    if(bstr) {
+      if(i > 0) {
+        str += '\n';
+      }
+      str += bstr;
+    }
+  }
+  return str;
+}
+
+export function codeFromTSModuleDeclaration(ast: TSModuleDeclaration): string {
+  let moduleName = codeFromAST(ast.id);
+  moduleQueue.push(moduleName);
+  let str = moduleName + ' = {}\n';
+  if(ast.body) {
+    str += indent(codeFromAST(ast.body));
+  }
+  moduleQueue.pop();
+  return str;
+}
+
+export function codeFromTSInterfaceDeclaration(ast: TSInterfaceDeclaration): string {
   return '';
+}
+
+export function codeFromTSTypeAssertion(ast: TSTypeAssertion): string {
+  return codeFromAST(ast.expression);
 }
 
 function indent(str: string): string {
@@ -1161,4 +1346,11 @@ function formatTip(content: string): string {
     rema = content.match(re);
   }
   return content;
+}
+
+function assert(cond: boolean, ast: any, message: string = null) {
+  if(!cond) {
+    console.log(util.inspect(ast, true, 6));
+    throw new Error(message ? message : 'Error');
+  }
 }

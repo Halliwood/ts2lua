@@ -1,12 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var typescript_estree_1 = require("@typescript-eslint/typescript-estree");
-var sf = require("string-format");
 var util = require("util");
-var blockDeep = 0;
-var allClasses = [];
-var classQueue = [];
 var noBraceTypes = [typescript_estree_1.AST_NODE_TYPES.MemberExpression, typescript_estree_1.AST_NODE_TYPES.ThisExpression, typescript_estree_1.AST_NODE_TYPES.Identifier];
+// TODO: Typeof's return value may be different between ts and lua
+var tsType2luaType = {
+    'undefined': 'nil',
+    'object': 'table'
+};
 var pv = 0;
 var operatorPriorityMap = {};
 setPriority(['( … )'], pv++);
@@ -113,16 +114,28 @@ function calPriority(ast) {
     }
     return ast.__calPriority;
 }
+var importContents = [];
+var allClasses = [];
+var classQueue = [];
+var moduleQueue = [];
+var hasContinue = false;
 function toLua(ast) {
-    blockDeep = 0;
+    importContents.length = 0;
     allClasses.length = 0;
     classQueue.length = 0;
     var content = codeFromAST(ast);
-    if (allClasses.length > 0) {
-        content = 'require("class")\n' + content;
-    }
     content = content.replace(/console[\.|:]log/g, 'print');
     content = formatTip(content);
+    if (allClasses.length > 0) {
+        importContents.push('class');
+    }
+    importContents.sort();
+    var importStr = '';
+    for (var _i = 0, importContents_1 = importContents; _i < importContents_1.length; _i++) {
+        var p = importContents_1[_i];
+        importStr += 'require("' + p + '")\n';
+    }
+    content = importStr + content;
     return content;
 }
 exports.toLua = toLua;
@@ -339,8 +352,29 @@ function codeFromAST(ast) {
         case typescript_estree_1.AST_NODE_TYPES.YieldExpression:
             str += codeFromYieldExpression(ast);
             break;
+        case typescript_estree_1.AST_NODE_TYPES.TSAbstractMethodDefinition:
+            str += codeFromTSAbstractMethodDefinition(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.TSAsExpression:
+            str += codeFromTSAsExpression(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.TSDeclareFunction:
+            str += codeFromTSDeclareFunction(ast);
+            break;
         case typescript_estree_1.AST_NODE_TYPES.TSEnumDeclaration:
             str += codeFromTSEnumDeclaration(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.TSModuleBlock:
+            str += codeFromTSModuleBlock(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.TSModuleDeclaration:
+            str += codeFromTSModuleDeclaration(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.TSInterfaceDeclaration:
+            str += codeFromTSInterfaceDeclaration(ast);
+            break;
+        case typescript_estree_1.AST_NODE_TYPES.TSTypeAssertion:
+            str += codeFromTSTypeAssertion(ast);
             break;
         default:
             console.log(util.inspect(ast, true, 3));
@@ -362,13 +396,42 @@ function codeFromArrayExpression(ast) {
 }
 exports.codeFromArrayExpression = codeFromArrayExpression;
 function codeFromArrayPattern(ast) {
-    console.assert(false, 'Not support ArrayPattern yet!');
+    assert(false, ast, 'Not support ArrayPattern yet!');
     return '';
 }
 exports.codeFromArrayPattern = codeFromArrayPattern;
 function codeFromArrowFunctionExpression(ast) {
-    console.assert(false, 'Not support ArrowFunctionExpression yet!');
-    return '';
+    var str = 'function(';
+    var defaultParamsStr = '';
+    if (ast.params) {
+        for (var i = 0, len = ast.params.length; i < len; i++) {
+            if (i > 0) {
+                str += ', ';
+            }
+            var oneParam = ast.params[i];
+            oneParam.__parent = ast;
+            str += codeFromAST(oneParam);
+            if (oneParam.type == typescript_estree_1.AST_NODE_TYPES.AssignmentPattern) {
+                var paramIdStr = codeFromAST(oneParam.left);
+                defaultParamsStr += 'if ' + paramIdStr + ' == nil then\n';
+                defaultParamsStr += indent(paramIdStr + '=' + codeFromAST(oneParam.right)) + '\n';
+                defaultParamsStr += 'end\n';
+            }
+        }
+    }
+    str += ')\n';
+    if (ast.body) {
+        var bodyStr = codeFromAST(ast.body);
+        if (defaultParamsStr) {
+            bodyStr = defaultParamsStr + bodyStr;
+        }
+        str += indent(bodyStr) + '\n';
+    }
+    assert(!ast.generator, ast, 'Not support generator yet!');
+    assert(!ast.async, ast, 'Not support async yet!');
+    assert(!ast.expression, ast, 'Not support expression yet!');
+    str += 'end\n';
+    return str;
 }
 exports.codeFromArrowFunctionExpression = codeFromArrowFunctionExpression;
 function codeFromAssignmentExpression(ast) {
@@ -385,7 +448,7 @@ function codeFromAssignmentPattern(ast) {
 }
 exports.codeFromAssignmentPattern = codeFromAssignmentPattern;
 function codeFromAwaitExpression(ast) {
-    console.assert(false, 'Not support AwaitExpression yet!');
+    assert(false, ast, 'Not support AwaitExpression yet!');
     return '';
 }
 exports.codeFromAwaitExpression = codeFromAwaitExpression;
@@ -398,26 +461,34 @@ function codeFromBinaryExpression(ast) {
     // TODO: Take care of string combination
     var left = codeFromAST(ast.left);
     var right = codeFromAST(ast.right);
-    if (ast.operator == '+' && (ast.left.__isString || ast.right.__isString)) {
-        optStr = '..';
-        ast.left.__isString = true;
+    if (ast.operator == '+') {
+        if ((ast.left.__isString || ast.right.__isString)) {
+            optStr = '..';
+            ast.left.__isString = true;
+        }
     }
-    return left + optStr + right;
+    else if (ast.operator = '!=') {
+        optStr = '~=';
+    }
+    return left + ' ' + optStr + ' ' + right;
 }
 exports.codeFromBinaryExpression = codeFromBinaryExpression;
 function codeFromBlockStatement(ast) {
     var str = '';
     for (var i = 0, len = ast.body.length; i < len; i++) {
-        if (i > 0) {
-            str += '\n';
+        var bstr = codeFromAST(ast.body[i]);
+        if (bstr) {
+            if (i > 0) {
+                str += '\n';
+            }
+            str += bstr;
         }
-        str += codeFromAST(ast.body[i]);
     }
     return str;
 }
 exports.codeFromBlockStatement = codeFromBlockStatement;
 function codeFromBreakStatement(ast) {
-    console.assert(!ast.label, 'Not support break label yet!');
+    assert(!ast.label, ast, 'Not support break label yet!');
     return 'break';
 }
 exports.codeFromBreakStatement = codeFromBreakStatement;
@@ -445,10 +516,13 @@ exports.codeFromCatchClause = codeFromCatchClause;
 function codeFromClassBody(ast) {
     var str = '';
     for (var i = 0, len = ast.body.length; i < len; i++) {
-        if (i > 0) {
-            str += '\n';
+        var cbodyStr = codeFromAST(ast.body[i]);
+        if (cbodyStr) {
+            if (i > 0) {
+                str += '\n';
+            }
+            str += cbodyStr;
         }
-        str += codeFromAST(ast.body[i]);
     }
     return str;
 }
@@ -469,7 +543,7 @@ function codeFromClassDeclaration(ast) {
         str = str.replace('$ClassName$', className);
     }
     else {
-        console.assert(false, 'Class name is necessary!');
+        assert(false, ast, 'Class name is necessary!');
     }
     str += codeFromClassBody(ast.body);
     if (ast.superClass) {
@@ -486,11 +560,11 @@ function codeFromClassDeclaration(ast) {
     // }
     if (ast.declare) {
         // boolean
-        console.assert(false);
+        assert(false, ast);
     }
     if (ast.decorators) {
         // Decorator[];
-        console.assert(false);
+        assert(false, ast);
     }
     classQueue.pop();
     return str;
@@ -533,46 +607,45 @@ function codeFromConditionalExpression(ast) {
 }
 exports.codeFromConditionalExpression = codeFromConditionalExpression;
 function codeFromContinueStatement(ast) {
-    console.assert(false, 'Not support ContinueStatement yet!');
-    return '';
+    hasContinue = true;
+    return 'break';
 }
 exports.codeFromContinueStatement = codeFromContinueStatement;
 function codeFromDebuggerStatement(ast) {
-    console.assert(false, 'Not support DebuggerStatement yet!');
+    assert(false, ast, 'Not support DebuggerStatement yet!');
     return '';
 }
 exports.codeFromDebuggerStatement = codeFromDebuggerStatement;
 function codeFromDecorator(ast) {
-    console.assert(false, 'Not support Decorator yet!');
+    assert(false, ast, 'Not support Decorator yet!');
     return '';
 }
 exports.codeFromDecorator = codeFromDecorator;
 function codeFromDoWhileStatement(ast) {
-    console.assert(false, 'Not support DoWhileStatement yet!');
+    assert(false, ast, 'Not support DoWhileStatement yet!');
     return '';
 }
 exports.codeFromDoWhileStatement = codeFromDoWhileStatement;
 function codeFromEmptyStatement(ast) {
-    console.assert(false, 'Not support EmptyStatement yet!');
     return '';
 }
 exports.codeFromEmptyStatement = codeFromEmptyStatement;
 function codeFromExportAllDeclaration(ast) {
-    console.assert(false, 'Not support ExportAllDeclaration yet!');
+    assert(false, ast, 'Not support ExportAllDeclaration yet!');
     return '';
 }
 exports.codeFromExportAllDeclaration = codeFromExportAllDeclaration;
 function codeFromExportDefaultDeclaration(ast) {
-    console.assert(false, 'Not support ExportDefaultDeclaration yet!');
     return '';
 }
 exports.codeFromExportDefaultDeclaration = codeFromExportDefaultDeclaration;
 function codeFromExportNamedDeclaration(ast) {
+    ast.declaration.__exported = true;
     return codeFromAST(ast.declaration);
 }
 exports.codeFromExportNamedDeclaration = codeFromExportNamedDeclaration;
 function codeFromExportSpecifier(ast) {
-    console.assert(false, 'Not support ExportSpecifier yet!');
+    assert(false, ast, 'Not support ExportSpecifier yet!');
     return '';
 }
 exports.codeFromExportSpecifier = codeFromExportSpecifier;
@@ -583,24 +656,28 @@ exports.codeFromExpressionStatement = codeFromExpressionStatement;
 function codeFromForInStatement(ast) {
     var str = 'for ' + codeFromAST(ast.left) + ' in pairs(' + codeFromAST(ast.right) + ') do\n';
     str += codeFromAST(ast.body) + '\n';
-    str += 'end\n';
+    str += 'end';
     return str;
 }
 exports.codeFromForInStatement = codeFromForInStatement;
 function codeFromForOfStatement(ast) {
     var str = 'for _tmpi, ' + codeFromAST(ast.left) + ' in pairs(' + codeFromAST(ast.right) + ') do\n';
     str += codeFromAST(ast.body) + '\n';
-    str += 'end\n';
+    str += 'end';
     return str;
 }
 exports.codeFromForOfStatement = codeFromForOfStatement;
 function codeFromForStatement(ast) {
+    hasContinue = false;
     var str = '';
     if (ast.init) {
         str += codeFromAST(ast.init) + '\n';
     }
     str += 'repeat\n';
     var repeatBodyStr = codeFromAST(ast.body);
+    if (hasContinue) {
+        repeatBodyStr = 'repeat\n' + indent(repeatBodyStr + '\nbreak') + '\nuntil true';
+    }
     if (ast.update) {
         repeatBodyStr += '\n';
         repeatBodyStr += codeFromAST(ast.update);
@@ -626,7 +703,7 @@ function codeFromFunctionExpression(ast) {
 exports.codeFromFunctionExpression = codeFromFunctionExpression;
 function codeFromFunctionExpressionInternal(funcName, ast) {
     var str = '';
-    if (!funcName) {
+    if (!funcName && ast.id) {
         funcName = codeFromAST(ast.id);
     }
     if (funcName) {
@@ -639,8 +716,15 @@ function codeFromFunctionExpressionInternal(funcName, ast) {
             str = 'function ' + className + '.prototype:' + funcName + '(';
         }
         else {
-            // 普通函数
-            str = 'function ' + funcName + '(';
+            var moduleName = moduleQueue[moduleQueue.length - 1];
+            if (moduleName) {
+                // 模块函数
+                str = 'function ' + moduleName + ':' + funcName + '(';
+            }
+            else {
+                // 普通函数
+                str = 'function ' + funcName + '(';
+            }
         }
     }
     else {
@@ -665,19 +749,16 @@ function codeFromFunctionExpressionInternal(funcName, ast) {
     }
     str += ')\n';
     if (ast.body) {
-        blockDeep++;
         var bodyStr = codeFromAST(ast.body);
         if (defaultParamsStr) {
             bodyStr = defaultParamsStr + bodyStr;
         }
         str += indent(bodyStr) + '\n';
-        blockDeep--;
     }
-    console.assert(!ast.generator, 'Not support generator yet!');
-    console.assert(!ast.async, 'Not support async yet!');
-    console.assert(!ast.expression, 'Not support expression yet!');
-    console.assert(!ast.typeParameters, 'Not support typeParameters yet!');
-    console.assert(!ast.declare, 'Not support declare yet!');
+    assert(!ast.generator, ast, 'Not support generator yet!');
+    assert(!ast.async, ast, 'Not support async yet!');
+    assert(!ast.expression, ast, 'Not support expression yet!');
+    assert(!ast.declare, ast, 'Not support declare yet!');
     str += 'end\n';
     return str;
 }
@@ -692,48 +773,55 @@ function codeFromIfStatement(ast) {
         str += 'else\n';
         str += indent(codeFromAST(ast.alternate) + '\n');
     }
-    str += 'end\n';
+    str += 'end';
     return str;
 }
 exports.codeFromIfStatement = codeFromIfStatement;
 function codeFromImport(ast) {
-    console.assert(false, 'Not support Import yet!');
+    assert(false, ast, 'Not support Import yet!');
     return '';
 }
 exports.codeFromImport = codeFromImport;
 function codeFromImportDeclaration(ast) {
-    var tmpl = "require({})\n";
-    return sf(tmpl, ast.source.raw);
+    var p = ast.source.value;
+    if (importContents.indexOf(p) < 0) {
+        importContents.push(p);
+    }
+    return '';
 }
 exports.codeFromImportDeclaration = codeFromImportDeclaration;
 function codeFromImportDefaultSpecifier(ast) {
-    console.assert(false, 'Not support ImportDefaultSpecifier yet!');
+    assert(false, ast, 'Not support ImportDefaultSpecifier yet!');
     return '';
 }
 exports.codeFromImportDefaultSpecifier = codeFromImportDefaultSpecifier;
 function codeFromImportNamespaceSpecifier(ast) {
-    console.assert(false, 'Not support ImportNamespaceSpecifier yet!');
+    assert(false, ast, 'Not support ImportNamespaceSpecifier yet!');
     return '';
 }
 exports.codeFromImportNamespaceSpecifier = codeFromImportNamespaceSpecifier;
 function codeFromImportSpecifier(ast) {
-    console.assert(false, 'Not support ImportSpecifier yet!');
+    assert(false, ast, 'Not support ImportSpecifier yet!');
     return '';
 }
 exports.codeFromImportSpecifier = codeFromImportSpecifier;
 function codeFromLabeledStatement(ast) {
-    console.assert(false, 'Not support LabeledStatement yet!');
+    assert(false, ast, 'Not support LabeledStatement yet!');
     return '';
 }
 exports.codeFromLabeledStatement = codeFromLabeledStatement;
 function codeFromLiteral(ast) {
     if (ast.regex) {
-        console.assert(false, 'Not support regex yet!');
+        return ast.raw + wrapTip('tslua无法自动转换正则表达式，请手动处理。');
     }
     if (typeof (ast.value) == 'string') {
         ast.__isString = true;
     }
-    return ast.raw;
+    var l = ast.raw;
+    if (null === ast.value) {
+        l = 'nil';
+    }
+    return l;
 }
 exports.codeFromLiteral = codeFromLiteral;
 function codeFromLogicalExpression(ast) {
@@ -786,7 +874,7 @@ function codeFromMemberExpression(ast) {
 }
 exports.codeFromMemberExpression = codeFromMemberExpression;
 function codeFromMetaProperty(ast) {
-    console.assert(false, 'Not support MetaProperty yet!');
+    assert(false, ast, 'Not support MetaProperty yet!');
     return '';
 }
 exports.codeFromMetaProperty = codeFromMetaProperty;
@@ -796,7 +884,7 @@ function codeFromMethodDefinition(ast) {
         funcName = codeFromAST(ast.key);
     }
     if (ast.value.type == "TSEmptyBodyFunctionExpression") {
-        console.assert(false, 'Not support TSEmptyBodyFunctionExpression yet!');
+        assert(false, ast, 'Not support TSEmptyBodyFunctionExpression yet!');
     }
     return codeFromFunctionExpressionInternal(funcName, ast.value);
 }
@@ -829,20 +917,21 @@ function codeFromObjectExpression(ast) {
 }
 exports.codeFromObjectExpression = codeFromObjectExpression;
 function codeFromObjectPattern(ast) {
-    console.assert(false, 'Not support ObjectPattern yet!');
+    assert(false, ast, 'Not support ObjectPattern yet!');
     return '';
 }
 exports.codeFromObjectPattern = codeFromObjectPattern;
 function codeFromProgram(ast) {
     var str = '';
     for (var i = 0, len = ast.body.length; i < len; i++) {
-        if (i > 0) {
-            str += '\n';
-            str += '--分割线\n';
-            str += '\n';
-        }
         var stm = ast.body[i];
-        str += codeFromAST(stm);
+        var bodyStr = codeFromAST(stm);
+        if (bodyStr) {
+            if (i > 0) {
+                str += '\n';
+            }
+            str += bodyStr;
+        }
     }
     return str;
 }
@@ -852,11 +941,13 @@ function codeFromProperty(ast) {
 }
 exports.codeFromProperty = codeFromProperty;
 function codeFromRestElement(ast) {
-    console.assert(false, 'Not support RestElement yet!');
-    return '';
+    return '...';
 }
 exports.codeFromRestElement = codeFromRestElement;
 function codeFromReturnStatement(ast) {
+    if (!ast.argument) {
+        return 'return';
+    }
     return 'return ' + codeFromAST(ast.argument);
 }
 exports.codeFromReturnStatement = codeFromReturnStatement;
@@ -872,8 +963,7 @@ function codeFromSequenceExpression(ast) {
 }
 exports.codeFromSequenceExpression = codeFromSequenceExpression;
 function codeFromSpreadElement(ast) {
-    console.assert(false, 'Not support SpreadElement yet!');
-    return '';
+    return '...';
 }
 exports.codeFromSpreadElement = codeFromSpreadElement;
 function codeFromSuper(ast) {
@@ -892,7 +982,7 @@ function codeFromSwitchCase(ast) {
     for (var i = 0, len = ast.consequent.length; i < len; i++) {
         str += codeFromAST(ast.consequent[i]) + '\n';
     }
-    str += 'end\n';
+    str += 'end';
     return str;
 }
 exports.codeFromSwitchCase = codeFromSwitchCase;
@@ -915,17 +1005,17 @@ function codeFromSwitchStatement(ast) {
 }
 exports.codeFromSwitchStatement = codeFromSwitchStatement;
 function codeFromTaggedTemplateExpression(ast) {
-    console.assert(false, 'Not support TaggedTemplateExpression yet!');
+    assert(false, ast, 'Not support TaggedTemplateExpression yet!');
     return '';
 }
 exports.codeFromTaggedTemplateExpression = codeFromTaggedTemplateExpression;
 function codeFromTemplateElement(ast) {
-    console.assert(false, 'Not support TemplateElement yet!');
+    assert(false, ast, 'Not support TemplateElement yet!');
     return '';
 }
 exports.codeFromTemplateElement = codeFromTemplateElement;
 function codeFromTemplateLiteral(ast) {
-    console.assert(false, 'Not support TemplateLiteral yet!');
+    assert(false, ast, 'Not support TemplateLiteral yet!');
     return '';
 }
 exports.codeFromTemplateLiteral = codeFromTemplateLiteral;
@@ -938,8 +1028,24 @@ function codeFromThrowStatement(ast) {
 }
 exports.codeFromThrowStatement = codeFromThrowStatement;
 function codeFromTryStatement(ast) {
-    console.assert(false, 'Not support codeFromTryStatement yet!');
-    return '';
+    importContents.push('trycatch');
+    var str = 'try_catch{\n';
+    var tcStr = 'main = function()\n';
+    tcStr += indent(codeFromAST(ast.block));
+    tcStr += 'end,\n';
+    if (ast.handler) {
+        tcStr += 'catch = function()\n';
+        tcStr += indent(codeFromAST(ast.handler));
+        tcStr += 'end,\n';
+    }
+    if (ast.finalizer) {
+        tcStr += 'finally = function()\n';
+        tcStr += indent(codeFromAST(ast.finalizer));
+        tcStr += 'end\n';
+    }
+    str += indent(tcStr);
+    str += '}';
+    return str;
 }
 exports.codeFromTryStatement = codeFromTryStatement;
 function codeFromUnaryExpression(ast) {
@@ -955,11 +1061,14 @@ function codeFromUnaryExpression(ast) {
         else if ('delete' == ast.operator) {
             str = agm + ' = nil';
         }
+        else if ('!' == ast.operator) {
+            str = 'not ' + agm;
+        }
         else if ('void' == ast.operator) {
-            console.assert(false, 'Not support void yet!');
+            assert(false, ast, 'Not support void yet!');
         }
         else {
-            console.assert(false, 'Not support UnaryOperator: ' + ast.operator);
+            assert('-' == ast.operator, 'Not support UnaryOperator: ' + ast.operator);
             str = ast.operator + agm;
         }
     }
@@ -998,12 +1107,10 @@ function codeFromVariableDeclaration(ast) {
 }
 exports.codeFromVariableDeclaration = codeFromVariableDeclaration;
 function codeFromVariableDeclarator(ast) {
-    var str = codeFromAST(ast.id);
+    var str = '';
     if (ast.init) {
+        str += codeFromAST(ast.id);
         str += '=' + codeFromAST(ast.init);
-    }
-    else {
-        console.assert(false, 'Not support VariableDeclarator without init yet');
     }
     return str;
 }
@@ -1018,7 +1125,7 @@ function codeFromWhileStatement(ast) {
 }
 exports.codeFromWhileStatement = codeFromWhileStatement;
 function codeFromWithStatement(ast) {
-    console.assert(false, 'Not support WithStatement yet');
+    assert(false, ast, 'Not support WithStatement yet');
     return '';
 }
 exports.codeFromWithStatement = codeFromWithStatement;
@@ -1029,11 +1136,83 @@ function codeFromYieldExpression(ast) {
     return str;
 }
 exports.codeFromYieldExpression = codeFromYieldExpression;
+function codeFromTSAbstractMethodDefinition(ast) {
+    return codeFromMethodDefinition(ast);
+}
+exports.codeFromTSAbstractMethodDefinition = codeFromTSAbstractMethodDefinition;
+function codeFromTSAsExpression(ast) {
+    return codeFromAST(ast.expression);
+}
+exports.codeFromTSAsExpression = codeFromTSAsExpression;
+function codeFromTSDeclareFunction(ast) {
+    return wrapTip('请手动处理DeclareFunction');
+}
+exports.codeFromTSDeclareFunction = codeFromTSDeclareFunction;
 function codeFromTSEnumDeclaration(ast) {
-    console.assert(false, 'Not support TSEnumDeclaration yet');
-    return '';
+    var str = '';
+    if (!ast.__exported) {
+        str += 'local ';
+    }
+    str += codeFromAST(ast.id) + ' = {\n';
+    var membersStr = '';
+    var nextValue = 0;
+    for (var i = 0, len = ast.members.length; i < len; i++) {
+        if (i > 0) {
+            membersStr += ',\n';
+        }
+        var m = ast.members[i];
+        membersStr += codeFromAST(m.id) + ' = ';
+        if (m.initializer) {
+            membersStr += codeFromAST(m.initializer);
+            nextValue = m.initializer.value + 1;
+        }
+        else {
+            membersStr += nextValue;
+            nextValue++;
+        }
+    }
+    str += indent(membersStr) + '\n';
+    str += '}';
+    assert(!ast.const, ast);
+    assert(!ast.declare, ast);
+    assert(!ast.modifiers, ast);
+    assert(!ast.decorators, ast);
+    return str;
 }
 exports.codeFromTSEnumDeclaration = codeFromTSEnumDeclaration;
+function codeFromTSModuleBlock(ast) {
+    var str = '';
+    for (var i = 0, len = ast.body.length; i < len; i++) {
+        var bstr = codeFromAST(ast.body[i]);
+        if (bstr) {
+            if (i > 0) {
+                str += '\n';
+            }
+            str += bstr;
+        }
+    }
+    return str;
+}
+exports.codeFromTSModuleBlock = codeFromTSModuleBlock;
+function codeFromTSModuleDeclaration(ast) {
+    var moduleName = codeFromAST(ast.id);
+    moduleQueue.push(moduleName);
+    var str = moduleName + ' = {}\n';
+    if (ast.body) {
+        str += indent(codeFromAST(ast.body));
+    }
+    moduleQueue.pop();
+    return str;
+}
+exports.codeFromTSModuleDeclaration = codeFromTSModuleDeclaration;
+function codeFromTSInterfaceDeclaration(ast) {
+    return '';
+}
+exports.codeFromTSInterfaceDeclaration = codeFromTSInterfaceDeclaration;
+function codeFromTSTypeAssertion(ast) {
+    return codeFromAST(ast.expression);
+}
+exports.codeFromTSTypeAssertion = codeFromTSTypeAssertion;
 function indent(str) {
     var indentStr = '  ';
     // for(let i = 0; i < blockDeep; i++) {
@@ -1084,4 +1263,11 @@ function formatTip(content) {
         rema = content.match(re);
     }
     return content;
+}
+function assert(cond, ast, message) {
+    if (message === void 0) { message = null; }
+    if (!cond) {
+        console.log(util.inspect(ast, true, 6));
+        throw new Error(message ? message : 'Error');
+    }
 }
