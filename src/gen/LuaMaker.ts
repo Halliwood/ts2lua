@@ -150,7 +150,7 @@ export function toLua(ast: any): string {
   for(let p of importContents) {
     importStr += 'require("' + p + '")\n';
   }
-  content = importStr + content;
+  content = importStr + '\n' + content;
   return content;
 }
 
@@ -554,18 +554,44 @@ export function codeFromBigIntLiteral(ast: BigIntLiteral): string {
 
 export function codeFromBinaryExpression(ast: BinaryExpression): string {
   let optStr = ast.operator;
-  // TODO: Take care of string combination
+  assert('>>>=' != optStr, ast, 'Not support >>>= yet!')
   let left = codeFromAST(ast.left);
   let right = codeFromAST(ast.right);
-  if(ast.operator == '+') {
+
+  let selffOpts: string[] = ['+=', '-=', '*=', '/=', '%=', '<<=', '>>=', '&=', '^=', '|='];
+  let isSelfOperator = false;
+  if(selffOpts.indexOf(optStr) >= 0) {
+    // self operator
+    isSelfOperator = true;
+    optStr = optStr.substr(0, optStr.length - 1);
+  } 
+  if(optStr == '+') {
     if(((ast.left as any).__isString || (ast.right as any).__isString)) {
+      // TODO: Take care of string combination
       optStr = '..';
       (ast.left as any).__isString = true;
     }
-  } else if(ast.operator = '!=') {
-    optStr = '~='
+  } else if(optStr == '!=') {
+    optStr = '~=';
   }
-  return left + ' ' + optStr + ' ' + right;
+
+  if(optStr == 'instanceof') {
+    return left + ':instanceof(' + right + ')';
+  }
+
+  let str = '';
+  let astType = (ast as any).type;
+  if(astType == AST_NODE_TYPES.AssignmentExpression && ast.right.type == AST_NODE_TYPES.AssignmentExpression) {
+    // 处理 a = b = c
+    str = right + '\n';
+    right = codeFromAST((ast.right as AssignmentExpression).left);
+  }
+
+  if(isSelfOperator) {
+    return str + left + ' = ' + left + ' ' + optStr + ' ' + right;
+  }
+
+  return str + left + ' ' + optStr + ' ' + right;
 }
 
 export function codeFromBlockStatement(ast: BlockStatement): string {
@@ -589,22 +615,35 @@ export function codeFromBreakStatement(ast: BreakStatement): string {
 
 export function codeFromCallExpression(ast: CallExpression): string {
   (ast.callee as any).__parent = ast;
-  let str = codeFromAST(ast.callee);
-  str += '(';
+  let calleeStr = codeFromAST(ast.callee);
+  let str = '';
+  let allAgmStr = '';
   for (let i = 0, len = ast.arguments.length; i < len; i++) {
-    if (i > 0) {
-      str += ', ';
+    let arg = ast.arguments[i];
+    let argStr = codeFromAST(arg);
+    if(arg.type == AST_NODE_TYPES.AssignmentExpression) {
+      str += argStr + '\n';
+      argStr = codeFromAST((arg as AssignmentExpression).left);
+    } 
+    if(allAgmStr) {
+      allAgmStr += ', ';
     }
-    str += codeFromAST(ast.arguments[i]);
+    allAgmStr += argStr;
   }
-  str += ')';
+  if(calleeStr.match(/:push$/)) {
+    // Array push change into table.concat
+    str += 'table.concat(' + calleeStr.substr(0, calleeStr.length - 5) + ', ' + allAgmStr + ')';
+  } else {
+    str = calleeStr + '(';
+    str += allAgmStr;
+    str += ')';
+  }
   return str;
 }
 
 export function codeFromCatchClause(ast: CatchClause): string {
-  let str = 'function($param$)'.replace('$param$', codeFromAST(ast.param));
+  let str = 'function($param$)\n'.replace('$param$', codeFromAST(ast.param));
   str += codeFromBlockStatement(ast.body);
-  str += 'end';
   return str;
 }
 
@@ -689,13 +728,10 @@ export function codeFromClassProperty(ast: ClassProperty): string {
 }
 
 export function codeFromConditionalExpression(ast: ConditionalExpression): string {
-  let str = 'if ' + codeFromAST(ast.test) + ' then \n';
-  str += codeFromAST(ast.consequent) + '\n';
-  if (ast.alternate) {
-    str += 'else \n';
-    str += codeFromAST(ast.alternate) + '\n';
-  }
-  str += 'end';
+  // TODO: 0 or '' are considered true in lua while false in TypeScript
+  let testStr = codeFromAST(ast.test);
+  let str = '(' + testStr + ' and {' + codeFromAST(ast.consequent) + '} or {' + codeFromAST(ast.alternate) + '})[1]';
+  str += wrapTip('lua中0和空字符串也是true，此处' + testStr + '需要确认');
   return str;
 }
 
@@ -747,15 +783,17 @@ export function codeFromExpressionStatement(ast: ExpressionStatement): string {
 }
 
 export function codeFromForInStatement(ast: ForInStatement): string {
+  (ast.left as any).__parent = ast;
   let str = 'for ' + codeFromAST(ast.left) + ' in pairs(' + codeFromAST(ast.right) + ') do\n';
-  str += codeFromAST(ast.body) + '\n';
+  str += indent(codeFromAST(ast.body)) + '\n';
   str += 'end';
   return str;
 }
 
 export function codeFromForOfStatement(ast: ForOfStatement): string {
+  (ast.left as any).__parent = ast;
   let str = 'for _tmpi, ' + codeFromAST(ast.left) + ' in pairs(' + codeFromAST(ast.right) + ') do\n';
-  str += codeFromAST(ast.body) + '\n';
+  str += indent(codeFromAST(ast.body)) + '\n';
   str += 'end';
   return str;
 }
@@ -764,7 +802,7 @@ export function codeFromForStatement(ast: ForStatement): string {
   hasContinue = false;
 
   let str = '';
-  if (ast.init) {
+  if (ast.init && ast.init.type != AST_NODE_TYPES.Identifier) {
     str += codeFromAST(ast.init) + '\n';
   }
   str += 'repeat\n';
@@ -838,19 +876,24 @@ function codeFromFunctionExpressionInternal(funcName: string, ast: FunctionExpre
       }
     }
   }
-  str += ')\n';
+  str += ')';
+  let bodyStr = '';
   if (ast.body) {
-    let bodyStr = codeFromAST(ast.body);
+    bodyStr = codeFromAST(ast.body);
     if(defaultParamsStr) {
       bodyStr = defaultParamsStr + bodyStr;
-    }
-    str += indent(bodyStr) + '\n';
+    }    
+  }
+
+  if(bodyStr) {
+    str += '\n' + indent(bodyStr) + '\nend\n';
+  } else {
+    str += ' end';
   }
   assert(!ast.generator, ast, 'Not support generator yet!');
   assert(!ast.async, ast, 'Not support async yet!');
   assert(!ast.expression, ast, 'Not support expression yet!');
   assert(!ast.declare, ast, 'Not support declare yet!');
-  str += 'end\n';
   return str;
 }
 
@@ -860,12 +903,12 @@ export function codeFromIdentifier(ast: Identifier): string {
 
 export function codeFromIfStatement(ast: IfStatement): string {
   let str = 'if ' + codeFromAST(ast.test) + ' then\n'
-  str += indent(codeFromAST(ast.consequent) + '\n');
+  str += indent(codeFromAST(ast.consequent));
   if (ast.alternate) {
-    str += 'else\n'
-    str += indent(codeFromAST(ast.alternate) + '\n');
+    str += '\nelse\n'
+    str += indent(codeFromAST(ast.alternate));
   }
-  str += 'end';
+  str += '\nend';
   return str;
 }
 
@@ -925,7 +968,13 @@ export function codeFromLogicalExpression(ast: LogicalExpression): string {
   if (calPriority(ast.right) >= calPriority(ast)) {
     right = '(' + right + ')';
   }
-  let str = left + ast.operator + right;
+  let optStr = ast.operator;
+  if(optStr == '&&') {
+    optStr = 'and';
+  } else if(optStr == '||') {
+    optStr = 'or';
+  }
+  let str = left + ' ' + optStr + ' ' + right;
   return str;
 }
 
@@ -1066,28 +1115,38 @@ export function codeFromSwitchCase(ast: SwitchCase): string {
   } else {
     str += '["default"] = function()\n';
   }
+  let csqStr = '';
   for (let i = 0, len = ast.consequent.length; i < len; i++) {
-    str += codeFromAST(ast.consequent[i]) + '\n';
+    if(ast.consequent[i].type != AST_NODE_TYPES.BreakStatement) {
+      if(i > 0) {
+        csqStr += '\n';
+      }
+      csqStr += codeFromAST(ast.consequent[i]);
+    }
   }
-  str += 'end';
+  if(csqStr) {
+    str += indent(csqStr);
+    str += '\nend';
+  } else {
+    str += ' end';
+  }
   return str;
 }
 
 export function codeFromSwitchStatement(ast: SwitchStatement): string {
-  let str = 'local switch = {\n'
+  let str = 'local switch = {\n';
+  let caseStr = '';
   for (let i = 0, len = ast.cases.length; i < len; i++) {
     if (i > 0) {
-      str += ',\n';
+      caseStr += ',\n';
     }
-    str += codeFromSwitchCase(ast.cases[i]);
+    caseStr += codeFromSwitchCase(ast.cases[i]);
   }
-  str += '}\n';
+  str += indent(caseStr);
+  str += '\n}\n';
   str += 'local casef = switch[' + codeFromAST(ast.discriminant) + ']\n';
-  str += 'if not casef then\n';
-  str += 'casef = switch["default"]\n';
-  str += 'end\n';
-  str += 'casef()\n';
-  str += 'end'
+  str += 'if not casef then casef = switch["default"] end\n';
+  str += 'if casef then casef() end';
   return str;
 }
 
@@ -1119,19 +1178,19 @@ export function codeFromTryStatement(ast: TryStatement): string {
   let str = 'try_catch{\n';
   let tcStr = 'main = function()\n';
   tcStr += indent(codeFromAST(ast.block));
-  tcStr += 'end,\n';
+  tcStr += '\nend';
   if(ast.handler) {
-    tcStr += 'catch = function()\n';
-    tcStr += indent(codeFromAST(ast.handler));
-    tcStr += 'end,\n'
+    tcStr += ',\ncatch = ';
+    tcStr += indent(codeFromAST(ast.handler), 1);
+    tcStr += '\nend'
   }
   if(ast.finalizer) {
-    tcStr += 'finally = function()\n';
+    tcStr += ',\nfinally = function()\n';
     tcStr += indent(codeFromAST(ast.finalizer));
-    tcStr += 'end\n'
+    tcStr += '\nend'
   }
   str += indent(tcStr);
-  str += '}';
+  str += '\n}';
   return str;
 }
 
@@ -1177,23 +1236,46 @@ export function codeFromUpdateExpression(ast: UpdateExpression): string {
 
 export function codeFromVariableDeclaration(ast: VariableDeclaration): string {
   // not support const
+  let forInOfTypes: string[] = [AST_NODE_TYPES.ForInStatement, AST_NODE_TYPES.ForOfStatement];
+  let isForInOf = (ast as any).__parent && forInOfTypes.indexOf((ast as any).__parent.type) >= 0;
   let str = '';
   for (let i = 0, len = ast.declarations.length; i < len; i++) {
-    // TODO: no local in for statement
-    if(i > 0) {
-      str += '\n';
+    let d = ast.declarations[i];
+    if(isForInOf) {
+      (d as any).__isForInOf = true;
+      if(i > 0) {
+        str += ', ';
+      }
+    } else {
+      if(i > 0) {
+        str += '\n';
+      }
     }
-    str += 'local ' + codeFromVariableDeclarator(ast.declarations[i]);
+    str += codeFromVariableDeclarator(d);
   }
   return str;
 }
 
 export function codeFromVariableDeclarator(ast: VariableDeclarator): string {
   let str = '';
-  if (ast.init) {
-    str += codeFromAST(ast.id)
-    str += '=' + codeFromAST(ast.init);
-  } 
+  let idStr = codeFromAST(ast.id);
+  let initStr = '';
+  if(ast.init) {
+    initStr = codeFromAST(ast.init);
+    if(ast.init.type == AST_NODE_TYPES.AssignmentExpression) {
+      str = initStr + '\n';
+      initStr = codeFromAST((ast.init as AssignmentExpression).left);
+    }
+  }
+  if(!(ast as any).__isForInOf) {
+    str += 'local ';
+  }
+  str += idStr;
+  if(initStr) {
+    str += ' = ' + initStr;
+  } else if(!(ast as any).__isForInOf) {
+    str += ' = nil';
+  }
   return str;
 }
 
@@ -1294,7 +1376,7 @@ export function codeFromTSTypeAssertion(ast: TSTypeAssertion): string {
   return codeFromAST(ast.expression);
 }
 
-function indent(str: string): string {
+function indent(str: string, fromLine: number = 0): string {
   let indentStr = '  ';
   // for(let i = 0; i < blockDeep; i++) {
   //   indentStr += '  ';
@@ -1306,7 +1388,10 @@ function indent(str: string): string {
     if(i > 0) {
       newStr += '\n';
     }
-    newStr += indentStr + lines[i];
+    if(i >= fromLine) {
+      newStr += indentStr;
+    }
+    newStr += lines[i];
   }
   if(endWithNewLine) {
     newStr += '\n';
@@ -1320,7 +1405,7 @@ function pintHit(ast: any): void {
 }
 
 function wrapTip(rawTip: string): string {
-  return '<TT>[ts2lua]' + rawTip + '</TT>';
+  return '<TT>[ts2lua]' + rawTip.replace(/<TT>.*?<\/TT>/g, '') + '</TT>';
 }
 
 function formatTip(content: string): string {

@@ -47,6 +47,56 @@ function TestSub.prototype:doStr()
 end
 ```
 
+## 关于运算符+的处理
+由于TypeScript采用+进行字符串连接，而lua采用..运算符。ts2lua在转换时尽可能识别字符串连接，但可能存在识别失败的情况，比如下述代码转化为
+
+TypeScript
+```TypeScript
+public log(s: string) {
+    this._log += s;
+    this._log += '\n';
+}
+```
+
+lua
+```lua
+function Result.prototype:log(s)
+  self._log = self._log + s
+  self._log = self._log .. '\n'
+end
+```
+
+## 关于数组push的处理
+所有名字为push的方法都会处理成table.concat。
+
+## 关于自增/增减的处理(UpdateExpression)
+由于lua没有自增/自减运算符，所以类似`A++`会处理成`A = A + 1`。不可避免地，由于语法之间的差异，比如TypeScript的语句`myArr[A++]`会被处理成`myArr[A = A + 1`，这在lua中是错误的。对于类似情况，ts2lua的转化结果可能不正确，需要手动处理。
+
+## 关于形如a = b = c的赋值表达式的处理
+由于lua不允许类似`a = b = c`的语法，ts2lua将处理成`b = c`和`a = b`两个语句，比如下述代码转化为：
+
+TypeScript
+```TypeScript
+let a = 1, b = 2, c = 3;
+let d = a = b = c;
+a *= b -= c;
+a = b /= c;
+```
+
+lua
+```lua
+local a = 1
+local b = 2
+local c = 3
+b = c
+a = b
+local d = a
+b = b - c
+a = a * b
+b = b / c
+a = b
+```
+
 ## 关于正则表达式的处理
 由于lua不适用POSIX规范的正则表达式，因此写法上与TypeScript存在很多的差异和限制。部分TypeScript正则表达式的特效并无法简单地在lua中实现，比如lookahead和lookbehind。因此ts2lua不对正则表达式进行处理，在生成lua代码时插入如下注释，请搜索该注释并手动处理。
 
