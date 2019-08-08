@@ -1,8 +1,8 @@
 # ts2lua
-Change typescript to lua.
+ts2lua可以将TypeScipt代码转化为lua代码并尽可能保证转换完成后代码的正确性。由于语法之间的差异性，部分难以使用通用规则进行转换的语句，ts2lua将在可能有疑义的地方加上以`-[ts2lua]`标记开头的注释，以便提示您进行手动确认。建议转化完成后全局搜索`[ts2lua]`一一确认。
 
-## 关于类成员变量、临时变量声明的处理
-TypeScript类中定义的成员变量的声明，如果没有在声明时进行初始化，则直接忽略，不会生成相关的lua代码。同理，临时变量也是一样。
+## 关于变量名、函数名不符合lua规范的处理
+如果变量名、函数名为lua关键字，则自动添加`tsvar_`的前缀。如果包含`$`等lua不支持的字符，则自动将`$`替换为`tsvar_`。
 
 ## 关于数组下标访问的处理
 由于lua的下标从1开始，所以对于类似`arr[i]`这种会转化为`arr[i+1]`，而对于`arr[idx]`这种则不会进行+1处理，ts2lua会自动添加注释提醒您人工确认转换结果是否正确。
@@ -47,6 +47,24 @@ function TestSub.prototype:doStr()
 end
 ```
 
+## 关于数组长度length的处理
+读取数组长度`arr.length`将处理成`#arr`，而修改数组长度则不做任何处理，请搜索ts2lua提示进行手动处理。比如下述代码转化为
+
+TypeScript
+```TypeScript
+let arr = [1, 2, 3];
+console.log('数组长度为' + arr.length);
+arr.length = 0;
+```
+
+lua
+```lua
+local arr = {1, 2, 3}
+print('数组长度为' .. #arr)
+-- [ts2lua]修改数组长度需要手动处理。
+arr.length = 0
+```
+
 ## 关于运算符+的处理
 由于TypeScript采用+进行字符串连接，而lua采用..运算符。ts2lua在转换时尽可能识别字符串连接，但可能存在识别失败的情况，比如下述代码转化为
 
@@ -70,7 +88,19 @@ end
 所有名字为push的方法都会处理成table.concat。
 
 ## 关于自增/增减的处理(UpdateExpression)
-由于lua没有自增/自减运算符，所以类似`A++`会处理成`A = A + 1`。不可避免地，由于语法之间的差异，比如TypeScript的语句`myArr[A++]`会被处理成`myArr[A = A + 1`，这在lua中是错误的。对于类似情况，ts2lua的转化结果可能不正确，需要手动处理。
+由于lua没有自增/自减运算符，所以类似`A++`会处理成`A = A + 1`。不可避免地，由于语法之间的差异，比如TypeScript的语句`myArr[A++]`会被处理成`myArr[A = A + 1`，这在lua中是错误的。对于类似情况，ts2lua的转化结果可能不正确，需要手动处理。比如下述代码转化为：
+
+TypeScript
+```TypeScript
+d = arr[d++] + arr[d];
+```
+
+lua
+```lua
+d = arr[d=d+1] + arr[d+1]
+```
+
+上述代码是有问题的，您需要根据实际语境进行手动修改。
 
 ## 关于形如a = b = c的赋值表达式的处理
 由于lua不允许类似`a = b = c`的语法，ts2lua将处理成`b = c`和`a = b`两个语句，比如下述代码转化为：
@@ -97,6 +127,31 @@ b = b / c
 a = b
 ```
 
+## 关于===和!==的处理
+`===`和`!==`将转换为`==`和`~=`，这在可以预见的大部分情况下是正确的。反而值得注意的是，TypeScript中的`==`和lua中的`==`可能在某些情况下存在不同的结果。比如下述代码：
+
+TypeScript
+```TypeScript
+let a = 1
+if(a == true) {
+  console.log('1 equals to true in TypeScript');  // a == true 成立
+} else {
+  console.log('1 not equals to true in TypeScript!');
+}
+```
+
+lua
+```lua
+local a = 1
+if a == true then
+  print('1 equals to true in lua.')
+else
+  print('1 not equals to true in lua!')  -- a == true 不成立
+end
+```
+
+ts2lua仅仅将`==`和`!=`转换为lua对应的`==`和`~=`，不会进行任何特殊处理，您还需要根据具体语境进行可能的修改。
+
 ## 关于正则表达式的处理
 由于lua不适用POSIX规范的正则表达式，因此写法上与TypeScript存在很多的差异和限制。部分TypeScript正则表达式的特效并无法简单地在lua中实现，比如lookahead和lookbehind。因此ts2lua不对正则表达式进行处理，在生成lua代码时插入如下注释，请搜索该注释并手动处理。
 
@@ -109,7 +164,14 @@ a = b
 ## for循环的处理
 对于常见的ts for循环，最直接与之对应的应该是lua的for的循环。但为了确保转换结果“总是”正确的，for循环总是转化为repeat...until结构。
 
-## 需要手动处理的代码
-* ExportDefaultDeclaration - 默认导出声明
-* TSDeclareFunction - 函数声明
-* TSTypeParameterDeclaration - 泛型参数
+## 以下语句不生成对应lua代码
+* ExportDefaultDeclaration - 默认导出声明。
+* TSDeclareFunction - 函数声明。
+* TSTypeParameterDeclaration - 泛型参数。
+
+## 以下语句不进行处理
+* 正则表达式。
+* 使用了自增/自减的复杂语句，比如`a = b++`、`a = arr[b++]`等。
+* lua不支持的操作符，比如`in`。
+* 使用中文作为key的Object。
+* TypeScript中一些常用的方法，比如`split`、`indexOf`等。

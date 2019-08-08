@@ -3,13 +3,15 @@ import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree';
 import sf = require('string-format');
 import util = require('util')
 
-const noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier];
+const noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier, AST_NODE_TYPES.CallExpression, AST_NODE_TYPES.TSAsExpression];
 
 // TODO: Typeof's return value may be different between ts and lua
 const tsType2luaType = {
   'undefined': 'nil',
   'object': 'table'
 };
+
+const luaKeyWords = ['and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while'];
 
 let pv = 0;
 const operatorPriorityMap: { [opt: string]: number } = {};
@@ -537,7 +539,7 @@ export function codeFromAssignmentExpression(ast: AssignmentExpression): string 
 export function codeFromAssignmentPattern(ast: AssignmentPattern): string {
   let str = codeFromAST(ast.left);
   let parent = (ast as any).__parent;
-  if(!parent || parent.type != AST_NODE_TYPES.FunctionExpression) {
+  if(!parent || (parent.type != AST_NODE_TYPES.FunctionExpression && parent.type != AST_NODE_TYPES.FunctionDeclaration)) {
      str += ' = ' + codeFromAST(ast.right);
   }
   return str;
@@ -554,7 +556,8 @@ export function codeFromBigIntLiteral(ast: BigIntLiteral): string {
 
 export function codeFromBinaryExpression(ast: BinaryExpression): string {
   let optStr = ast.operator;
-  assert('>>>=' != optStr, ast, 'Not support >>>= yet!')
+  assert('>>>=' != optStr, ast, 'Not support >>>= yet!');
+  (ast.left as any).__parent = ast;
   let left = codeFromAST(ast.left);
   let right = codeFromAST(ast.right);
 
@@ -572,6 +575,10 @@ export function codeFromBinaryExpression(ast: BinaryExpression): string {
       (ast.left as any).__isString = true;
     }
   } else if(optStr == '!=') {
+    optStr = '~=';
+  } else if(optStr == '===') {
+    optStr = '==';
+  } else if(optStr == '!==') {
     optStr = '~=';
   }
 
@@ -624,7 +631,10 @@ export function codeFromCallExpression(ast: CallExpression): string {
     if(arg.type == AST_NODE_TYPES.AssignmentExpression) {
       str += argStr + '\n';
       argStr = codeFromAST((arg as AssignmentExpression).left);
-    } 
+    } else if(arg.type == AST_NODE_TYPES.UpdateExpression) {
+      str += argStr + '\n';
+      argStr = codeFromAST((arg as UpdateExpression).argument);
+    }
     if(allAgmStr) {
       allAgmStr += ', ';
     }
@@ -898,14 +908,21 @@ function codeFromFunctionExpressionInternal(funcName: string, ast: FunctionExpre
 }
 
 export function codeFromIdentifier(ast: Identifier): string {
-  return ast.name;
+  let str = ast.name;
+  if(luaKeyWords.indexOf(str) >= 0) {
+    str = 'tsvar_' + str;
+  } else if(str.substr(0, 1) == '$') {
+    str = 'tsvar_' + str.substr(1);
+  }
+  return str;
 }
 
 export function codeFromIfStatement(ast: IfStatement): string {
-  let str = 'if ' + codeFromAST(ast.test) + ' then\n'
+  let testStr = codeFromAST(ast.test);
+  let str = 'if ' + testStr + ' then\n';
   str += indent(codeFromAST(ast.consequent));
   if (ast.alternate) {
-    str += '\nelse\n'
+    str += '\nelse\n';
     str += indent(codeFromAST(ast.alternate));
   }
   str += '\nend';
@@ -952,6 +969,9 @@ export function codeFromLiteral(ast: Literal): string {
   if(typeof(ast.value) == 'string') {
     (ast as any).__isString = true;
   }
+  if((ast as any).__parent && (ast as any).__parent.type == AST_NODE_TYPES.Property) {
+    return ast.value as string;
+  }
   let l = ast.raw;
   if(null === ast.value) {
     l = 'nil';
@@ -995,7 +1015,11 @@ export function codeFromMemberExpression(ast: MemberExpression): string {
     str += '[' + propertyStr + ']';
   } else {
     if(ast.property.type == AST_NODE_TYPES.Identifier && ast.property.name == 'length') {
-      str = '#' + str;
+      if((!(ast as any).__parent || (ast as any).__parent.type != AST_NODE_TYPES.AssignmentExpression)) {
+        str = '#' + str;
+      } else {
+        str += '.length' + wrapTip('修改数组长度需要手动处理。');
+      }
     } else {
       // TODO: do something with static members
       let parent = (ast as any).__parent;
@@ -1074,7 +1098,8 @@ export function codeFromProgram(ast: Program): string {
 }
 
 export function codeFromProperty(ast: Property): string {
-  return codeFromAST(ast.key) + ':' + codeFromAST(ast.value);
+  (ast.key as any).__parent = ast;
+  return codeFromAST(ast.key) + '=' + codeFromAST(ast.value);
 }
 
 export function codeFromRestElement(ast: RestElement): string {
@@ -1089,14 +1114,14 @@ export function codeFromReturnStatement(ast: ReturnStatement): string {
 }
 
 export function codeFromSequenceExpression(ast: SequenceExpression): string {
-  let str = '(';
+  let str = '';
   for (var i = 0, len = ast.expressions.length; i < len; i++) {
     if (i > 0) {
-      str += ', ';
+      str += '; ';
     }
     str += codeFromAST(ast.expressions[i]);
   }
-  return str + ')';
+  return str;
 }
 
 export function codeFromSpreadElement(ast: SpreadElement): string {
@@ -1406,6 +1431,10 @@ function pintHit(ast: any): void {
 
 function wrapTip(rawTip: string): string {
   return '<TT>[ts2lua]' + rawTip.replace(/<TT>.*?<\/TT>/g, '') + '</TT>';
+}
+
+function wrapPop(popStr: string): string {
+  return '<ts2lua' + popStr.length + '>' + popStr;
 }
 
 function formatTip(content: string): string {

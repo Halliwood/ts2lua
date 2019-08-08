@@ -2,12 +2,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var typescript_estree_1 = require("@typescript-eslint/typescript-estree");
 var util = require("util");
-var noBraceTypes = [typescript_estree_1.AST_NODE_TYPES.MemberExpression, typescript_estree_1.AST_NODE_TYPES.ThisExpression, typescript_estree_1.AST_NODE_TYPES.Identifier];
+var noBraceTypes = [typescript_estree_1.AST_NODE_TYPES.MemberExpression, typescript_estree_1.AST_NODE_TYPES.ThisExpression, typescript_estree_1.AST_NODE_TYPES.Identifier, typescript_estree_1.AST_NODE_TYPES.CallExpression, typescript_estree_1.AST_NODE_TYPES.TSAsExpression];
 // TODO: Typeof's return value may be different between ts and lua
 var tsType2luaType = {
     'undefined': 'nil',
     'object': 'table'
 };
+var luaKeyWords = ['and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while'];
 var pv = 0;
 var operatorPriorityMap = {};
 setPriority(['( … )'], pv++);
@@ -441,7 +442,7 @@ exports.codeFromAssignmentExpression = codeFromAssignmentExpression;
 function codeFromAssignmentPattern(ast) {
     var str = codeFromAST(ast.left);
     var parent = ast.__parent;
-    if (!parent || parent.type != typescript_estree_1.AST_NODE_TYPES.FunctionExpression) {
+    if (!parent || (parent.type != typescript_estree_1.AST_NODE_TYPES.FunctionExpression && parent.type != typescript_estree_1.AST_NODE_TYPES.FunctionDeclaration)) {
         str += ' = ' + codeFromAST(ast.right);
     }
     return str;
@@ -459,6 +460,7 @@ exports.codeFromBigIntLiteral = codeFromBigIntLiteral;
 function codeFromBinaryExpression(ast) {
     var optStr = ast.operator;
     assert('>>>=' != optStr, ast, 'Not support >>>= yet!');
+    ast.left.__parent = ast;
     var left = codeFromAST(ast.left);
     var right = codeFromAST(ast.right);
     var selffOpts = ['+=', '-=', '*=', '/=', '%=', '<<=', '>>=', '&=', '^=', '|='];
@@ -476,6 +478,12 @@ function codeFromBinaryExpression(ast) {
         }
     }
     else if (optStr == '!=') {
+        optStr = '~=';
+    }
+    else if (optStr == '===') {
+        optStr = '==';
+    }
+    else if (optStr == '!==') {
         optStr = '~=';
     }
     if (optStr == 'instanceof') {
@@ -524,6 +532,10 @@ function codeFromCallExpression(ast) {
         if (arg.type == typescript_estree_1.AST_NODE_TYPES.AssignmentExpression) {
             str += argStr + '\n';
             argStr = codeFromAST(arg.left);
+        }
+        else if (arg.type == typescript_estree_1.AST_NODE_TYPES.UpdateExpression) {
+            str += argStr + '\n';
+            argStr = codeFromAST(arg.argument);
         }
         if (allAgmStr) {
             allAgmStr += ', ';
@@ -802,11 +814,19 @@ function codeFromFunctionExpressionInternal(funcName, ast) {
     return str;
 }
 function codeFromIdentifier(ast) {
-    return ast.name;
+    var str = ast.name;
+    if (luaKeyWords.indexOf(str) >= 0) {
+        str = 'tsvar_' + str;
+    }
+    else if (str.substr(0, 1) == '$') {
+        str = 'tsvar_' + str.substr(1);
+    }
+    return str;
 }
 exports.codeFromIdentifier = codeFromIdentifier;
 function codeFromIfStatement(ast) {
-    var str = 'if ' + codeFromAST(ast.test) + ' then\n';
+    var testStr = codeFromAST(ast.test);
+    var str = 'if ' + testStr + ' then\n';
     str += indent(codeFromAST(ast.consequent));
     if (ast.alternate) {
         str += '\nelse\n';
@@ -856,6 +876,9 @@ function codeFromLiteral(ast) {
     if (typeof (ast.value) == 'string') {
         ast.__isString = true;
     }
+    if (ast.__parent && ast.__parent.type == typescript_estree_1.AST_NODE_TYPES.Property) {
+        return ast.value;
+    }
     var l = ast.raw;
     if (null === ast.value) {
         l = 'nil';
@@ -902,7 +925,12 @@ function codeFromMemberExpression(ast) {
     }
     else {
         if (ast.property.type == typescript_estree_1.AST_NODE_TYPES.Identifier && ast.property.name == 'length') {
-            str = '#' + str;
+            if ((!ast.__parent || ast.__parent.type != typescript_estree_1.AST_NODE_TYPES.AssignmentExpression)) {
+                str = '#' + str;
+            }
+            else {
+                str += '.length' + wrapTip('修改数组长度需要手动处理。');
+            }
         }
         else {
             // TODO: do something with static members
@@ -983,7 +1011,8 @@ function codeFromProgram(ast) {
 }
 exports.codeFromProgram = codeFromProgram;
 function codeFromProperty(ast) {
-    return codeFromAST(ast.key) + ':' + codeFromAST(ast.value);
+    ast.key.__parent = ast;
+    return codeFromAST(ast.key) + '=' + codeFromAST(ast.value);
 }
 exports.codeFromProperty = codeFromProperty;
 function codeFromRestElement(ast) {
@@ -998,14 +1027,14 @@ function codeFromReturnStatement(ast) {
 }
 exports.codeFromReturnStatement = codeFromReturnStatement;
 function codeFromSequenceExpression(ast) {
-    var str = '(';
+    var str = '';
     for (var i = 0, len = ast.expressions.length; i < len; i++) {
         if (i > 0) {
-            str += ', ';
+            str += '; ';
         }
         str += codeFromAST(ast.expressions[i]);
     }
-    return str + ')';
+    return str;
 }
 exports.codeFromSequenceExpression = codeFromSequenceExpression;
 function codeFromSpreadElement(ast) {
@@ -1324,6 +1353,9 @@ function pintHit(ast) {
 }
 function wrapTip(rawTip) {
     return '<TT>[ts2lua]' + rawTip.replace(/<TT>.*?<\/TT>/g, '') + '</TT>';
+}
+function wrapPop(popStr) {
+    return '<ts2lua' + popStr.length + '>' + popStr;
 }
 function formatTip(content) {
     var re = /<TT>.*?<\/TT>/;
