@@ -1,6 +1,30 @@
 # ts2lua
 ts2lua是一个将TypeScript代码转换为lua代码的工具。它使用一套简单的[lua面向对象写法](lua/class.lua "class.lua定义")，可以将TypeScipt类翻译成lua代码。
 
+## 安装
+```
+$ npm i ts2lua
+```
+
+## 用法
+转换TypeScript语句
+
+```JavaScript
+$ const ts2lua = require('ts2lua');
+const tsCode = 'let a = "Hello World!";';
+const luaCode = ts2lua.translate(tsCode);
+console.log(luaCode);
+```
+
+批量转换TypeScript文件
+
+```JavaScript
+$ const ts2lua = require('ts2lua');
+const inputPath = 'ts_file_root';
+conse outputPath = 'lua_file_root';
+ts2lua.translateFiles(inputPath, outputPath);
+```
+
 ## 关于变量名、函数名不符合lua规范的处理
 如果变量名、函数名为lua关键字，则自动添加`tsvar_`的前缀。如果包含`$`等lua不支持的字符，则自动将`$`替换为`tsvar_`。
 
