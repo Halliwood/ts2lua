@@ -4,3 +4,4 @@ smartCode.js
 **/robot/
 **/lua/*.lua
 !**/lua/class.lua
+!**/lua/trycatch.lua

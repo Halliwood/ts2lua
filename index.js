@@ -12,6 +12,7 @@ var path = require("path");
 var util = require("util");
 var parser = require("@typescript-eslint/typescript-estree");
 var lm = __importStar(require("./gen/LuaMaker"));
+var luaFilesToCopy = ['class.lua', 'trycatch.lua'];
 var inputFolder;
 var outputFolder;
 // translateFiles('G:\\ly\\trunk\\TsScripts', 'test\\out');
@@ -34,6 +35,11 @@ var fileCnt = 0;
  * @param outputPath output path where to write lua files into.
  */
 function translateFiles(inputPath, outputPath) {
+    // copy class.lua & trycatch.lua
+    for (var _i = 0, luaFilesToCopy_1 = luaFilesToCopy; _i < luaFilesToCopy_1.length; _i++) {
+        var luaFile = luaFilesToCopy_1[_i];
+        fs.copyFileSync('lua/' + luaFile, path.join(outputPath, luaFile));
+    }
     inputFolder = inputPath;
     outputFolder = outputPath;
     fileCnt = 0;

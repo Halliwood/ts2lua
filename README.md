@@ -10,7 +10,7 @@ $ npm i ts2lua
 转换TypeScript语句
 
 ```JavaScript
-$ const ts2lua = require('ts2lua');
+const ts2lua = require('ts2lua');
 const tsCode = 'let a = "Hello World!";';
 const luaCode = ts2lua.translate(tsCode);
 console.log(luaCode);
@@ -19,7 +19,7 @@ console.log(luaCode);
 批量转换TypeScript文件
 
 ```JavaScript
-$ const ts2lua = require('ts2lua');
+const ts2lua = require('ts2lua');
 const inputPath = 'ts_file_root';
 conse outputPath = 'lua_file_root';
 ts2lua.translateFiles(inputPath, outputPath);
@@ -112,7 +112,7 @@ end
 所有名字为push的方法都会处理成table.concat。
 
 ## 关于自增/增减的处理(UpdateExpression)
-由于lua没有自增/自减运算符，所以类似`A++`会处理成`A = A + 1`。不可避免地，由于语法之间的差异，比如TypeScript的语句`myArr[A++]`会被处理成`myArr[A = A + 1`，这在lua中是错误的。对于类似情况，ts2lua的转化结果可能不正确，需要手动处理。比如下述代码转化为：
+由于lua没有自增/自减运算符，所以类似`A++`会处理成`A = A + 1`。不可避免地，由于语法之间的差异，比如TypeScript的语句`myArr[A++]`会被处理成`myArr[A = A + 1]`，这在lua中是错误的。对于类似情况，ts2lua的转化结果可能不正确，需要手动处理。比如下述代码转化为：
 
 TypeScript
 ```TypeScript
@@ -175,6 +175,9 @@ end
 ```
 
 ts2lua仅仅将`==`和`!=`转换为lua对应的`==`和`~=`，不会进行任何特殊处理，您还需要根据具体语境进行可能的修改。
+
+## 关于try-catch的处理
+ts2lua使用了[模拟实现lua try-catch](lua/trycatch.lua "trycatch.lua定义")来转换TypeScript的try-catch语句。
 
 ## 关于正则表达式的处理
 由于lua不适用POSIX规范的正则表达式，因此写法上与TypeScript存在很多的差异和限制。部分TypeScript正则表达式的特效并无法简单地在lua中实现，比如lookahead和lookbehind。因此ts2lua不对正则表达式进行处理，在生成lua代码时插入如下注释，请搜索该注释并手动处理。
