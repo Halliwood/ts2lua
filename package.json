@@ -1,6 +1,6 @@
 {
   "name": "ts2lua",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Change typescript to lua.",
   "main": "index.js",
   "scripts": {
@@ -29,5 +29,9 @@
   "devDependencies": {
     "@types/node": "^12.6.8",
     "@types/typescript": "^2.0.0"
-  }
+  },
+  "files": [
+    "index.js",
+    "gen/LuaMaker.js"
+  ]
 }
