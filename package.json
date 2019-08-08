@@ -1,10 +1,13 @@
 {
   "name": "ts2lua",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Change typescript to lua.",
   "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
-    "test": "tsc && node index.js"
+    "test": "tsc && node index.js",
+    "build": "tsc",
+    "release": "tsc && npm config set registry=http://registry.npmjs.org && npm publish && npm config set registry=https://registry.npm.taobao.org/"
   },
   "repository": {
     "type": "git",
@@ -20,6 +23,7 @@
     "url": "https://github.com/Halliwood/ts2lua/issues"
   },
   "homepage": "https://github.com/Halliwood/ts2lua#readme",
+  "declaration": true,
   "dependencies": {
     "@types/string-format": "^2.0.0",
     "@typescript-eslint/typescript-estree": "^1.13.0",
@@ -28,10 +32,12 @@
   },
   "devDependencies": {
     "@types/node": "^12.6.8",
-    "@types/typescript": "^2.0.0"
+    "@types/typescript": "^2.0.0",
+    "dtsmake": "0.0.10"
   },
   "files": [
     "index.js",
+    "index.d.ts",
     "gen/LuaMaker.js"
   ]
 }

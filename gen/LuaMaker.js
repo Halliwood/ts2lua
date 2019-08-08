@@ -120,7 +120,11 @@ var allClasses = [];
 var classQueue = [];
 var moduleQueue = [];
 var hasContinue = false;
-function toLua(ast) {
+var filePath;
+var isDevMode = false;
+function toLua(ast, path, devMode) {
+    filePath = path;
+    isDevMode = devMode;
     importContents.length = 0;
     allClasses.length = 0;
     classQueue.length = 0;
@@ -131,13 +135,16 @@ function toLua(ast) {
         importContents.push('class');
     }
     importContents.sort();
-    var importStr = '';
+    var outStr = '';
     for (var _i = 0, importContents_1 = importContents; _i < importContents_1.length; _i++) {
         var p = importContents_1[_i];
-        importStr += 'require("' + p + '")\n';
+        outStr += 'require("' + p + '")\n';
     }
-    content = importStr + '\n' + content;
-    return content;
+    if (outStr) {
+        outStr += '\n';
+    }
+    outStr += content;
+    return outStr;
 }
 exports.toLua = toLua;
 function codeFromAST(ast) {
@@ -1154,7 +1161,7 @@ function codeFromUnaryExpression(ast) {
             assert(false, ast, 'Not support void yet!');
         }
         else {
-            assert('-' == ast.operator, 'Not support UnaryOperator: ' + ast.operator);
+            assert('-' == ast.operator, ast, 'Not support UnaryOperator: ' + ast.operator);
             str = ast.operator + agm;
         }
     }
@@ -1385,7 +1392,9 @@ function formatTip(content) {
 function assert(cond, ast, message) {
     if (message === void 0) { message = null; }
     if (!cond) {
-        console.log(util.inspect(ast, true, 6));
-        throw new Error(message ? message : 'Error');
+        if (isDevMode) {
+            console.log(util.inspect(ast, true, 6));
+        }
+        console.log('\x1B[36m%s\x1B[0m:\x1B[33m%d:%d\x1B[0m - \x1B[31merror\x1B[0m: %s', filePath, ast.loc.start.line, ast.loc.start.column, message ? message : 'Error');
     }
 }

@@ -1,4 +1,4 @@
-import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration, BindingName, TSAsExpression, TSInterfaceDeclaration, TSTypeAssertion, TSModuleDeclaration, TSModuleBlock, TSDeclareFunction, TSAbstractMethodDefinition } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
+import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration, BindingName, TSAsExpression, TSInterfaceDeclaration, TSTypeAssertion, TSModuleDeclaration, TSModuleBlock, TSDeclareFunction, TSAbstractMethodDefinition, BaseNode } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
 import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree';
 import util = require('util')
 
@@ -136,7 +136,13 @@ let classQueue: string[] = [];
 let moduleQueue: string[] = [];
 let hasContinue = false;
 
-export function toLua(ast: any): string {
+let filePath: string;
+let isDevMode = false;
+
+export function toLua(ast: any, path: string, devMode: boolean): string {
+  filePath = path;
+  isDevMode = devMode;
+
   importContents.length = 0;
   allClasses.length = 0;
   classQueue.length = 0;
@@ -147,12 +153,15 @@ export function toLua(ast: any): string {
     importContents.push('class');
   }
   importContents.sort();
-  let importStr = '';
+  let outStr = '';
   for(let p of importContents) {
-    importStr += 'require("' + p + '")\n';
+    outStr += 'require("' + p + '")\n';
   }
-  content = importStr + '\n' + content;
-  return content;
+  if(outStr) {
+    outStr += '\n';
+  }
+  outStr += content;
+  return outStr;
 }
 
 export function codeFromAST(ast: any): string {
@@ -1234,7 +1243,7 @@ export function codeFromUnaryExpression(ast: UnaryExpression): string {
     } else if ('void' == ast.operator) {
       assert(false, ast, 'Not support void yet!');
     } else {
-      assert('-' == ast.operator, 'Not support UnaryOperator: ' + ast.operator);
+      assert('-' == ast.operator, ast, 'Not support UnaryOperator: ' + ast.operator);
       str = ast.operator + agm;
     }
   } else {
@@ -1461,9 +1470,11 @@ function formatTip(content: string): string {
   return content;
 }
 
-function assert(cond: boolean, ast: any, message: string = null) {
+function assert(cond: boolean, ast: BaseNode, message: string = null) {
   if(!cond) {
-    console.log(util.inspect(ast, true, 6));
-    throw new Error(message ? message : 'Error');
+    if(isDevMode) {
+      console.log(util.inspect(ast, true, 6));
+    }
+    console.log('\x1B[36m%s\x1B[0m:\x1B[33m%d:%d\x1B[0m - \x1B[31merror\x1B[0m: %s', filePath, ast.loc.start.line, ast.loc.start.column, message ? message : 'Error');
   }
 }
