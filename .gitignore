@@ -2,4 +2,5 @@
 **/test/
 smartCode.js
 **/robot/
-**/lua/
+**/lua/*.lua
+!**/lua/class.lua

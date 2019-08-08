@@ -15,7 +15,7 @@
     "lua"
   ],
   "author": "Halliwood",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/Halliwood/ts2lua/issues"
   },
@@ -23,7 +23,8 @@
   "dependencies": {
     "@types/string-format": "^2.0.0",
     "@typescript-eslint/typescript-estree": "^1.13.0",
-    "string-format": "^2.0.0"
+    "string-format": "^2.0.0",
+    "typescript": "^3.5.3"
   },
   "devDependencies": {
     "@types/node": "^12.6.8",

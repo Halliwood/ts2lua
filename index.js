@@ -1,39 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-var __generator = (this && this.__generator) || function (thisArg, body) {
-    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
-    return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
-    function verb(n) { return function (v) { return step([n, v]); }; }
-    function step(op) {
-        if (f) throw new TypeError("Generator is already executing.");
-        while (_) try {
-            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
-            if (y = 0, t) op = [op[0] & 2, t.value];
-            switch (op[0]) {
-                case 0: case 1: t = op; break;
-                case 4: _.label++; return { value: op[1], done: false };
-                case 5: _.label++; y = op[1]; op = [0]; continue;
-                case 7: op = _.ops.pop(); _.trys.pop(); continue;
-                default:
-                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
-                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
-                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
-                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
-                    if (t[2]) _.ops.pop();
-                    _.trys.pop(); continue;
-            }
-            op = body.call(thisArg, _);
-        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
-        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
-    }
-};
 var __importStar = (this && this.__importStar) || function (mod) {
     if (mod && mod.__esModule) return mod;
     var result = {};
@@ -44,70 +9,63 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 var fs = __importStar(require("fs"));
 var path = require("path");
-var sf = require("string-format");
 var util = require("util");
 var parser = require("@typescript-eslint/typescript-estree");
 var lm = __importStar(require("./gen/LuaMaker"));
-var args = process.argv.splice(2);
-var inputFolder = 'G:\\ly\\trunk\\TsScripts';
+// const args = process.argv.splice(2);
+// const inputFolder = 'G:\\ly\\trunk\\TsScripts';
 // const inputFolder = 'test\\in';
-var outputFolder = 'test\\out';
-readDir(inputFolder);
-function readDir(dirPath) {
-    return __awaiter(this, void 0, void 0, function () {
-        var files, i, len, filename, filePath, fileStat, fileExt;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0:
-                    files = fs.readdirSync(dirPath);
-                    i = 0, len = files.length;
-                    _a.label = 1;
-                case 1:
-                    if (!(i < len)) return [3 /*break*/, 7];
-                    filename = files[i];
-                    filePath = path.join(dirPath, filename);
-                    fileStat = fs.statSync(filePath);
-                    if (!fileStat.isFile()) return [3 /*break*/, 4];
-                    fileExt = path.extname(filename).toLowerCase();
-                    if (!('.ts' == fileExt)) return [3 /*break*/, 3];
-                    return [4 /*yield*/, translate(filePath)];
-                case 2:
-                    _a.sent();
-                    _a.label = 3;
-                case 3: return [3 /*break*/, 6];
-                case 4: return [4 /*yield*/, readDir(filePath)];
-                case 5:
-                    _a.sent();
-                    _a.label = 6;
-                case 6:
-                    i++;
-                    return [3 /*break*/, 1];
-                case 7: return [2 /*return*/];
-            }
-        });
-    });
+// const outputFolder = 'test\\out';
+// readDir(inputFolder);
+function translate(tsCode) {
+    var parsed = parser.parse(tsCode);
+    return lm.toLua(parsed);
 }
-function translate(filePath) {
-    return __awaiter(this, void 0, void 0, function () {
-        var fileContent, parsed, outFilePath, fileFolder, str, luaContent, luaFilePath;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0:
-                    console.log(sf('parsing: {0}', filePath));
-                    fileContent = fs.readFileSync(filePath, 'utf-8');
-                    return [4 /*yield*/, parser.parse(fileContent)];
-                case 1:
-                    parsed = _a.sent();
-                    outFilePath = filePath.replace(inputFolder, outputFolder);
-                    fileFolder = outFilePath.substr(0, outFilePath.lastIndexOf('\\'));
-                    fs.mkdirSync(fileFolder, { recursive: true });
-                    str = util.inspect(parsed, true, 100);
-                    fs.writeFileSync(outFilePath.replace(/\.ts$/, '.txt'), str);
-                    luaContent = lm.toLua(parsed);
-                    luaFilePath = outFilePath.replace(/\.ts$/, '.lua');
-                    fs.writeFileSync(luaFilePath, luaContent);
-                    return [2 /*return*/];
+exports.translate = translate;
+var inputFolder;
+var outputFolder;
+var saveASTFile = false;
+function translateFiles(inputPath, outputPath) {
+    inputFolder = inputPath;
+    outputFolder = outputPath;
+    var inputStat = fs.statSync(inputPath);
+    if (inputStat.isFile()) {
+        doTranslateFile(inputPath);
+    }
+    else {
+        readDir(inputPath);
+    }
+}
+exports.translateFiles = translateFiles;
+function readDir(dirPath) {
+    var files = fs.readdirSync(dirPath);
+    for (var i = 0, len = files.length; i < len; i++) {
+        var filename = files[i];
+        var filePath = path.join(dirPath, filename);
+        var fileStat = fs.statSync(filePath);
+        if (fileStat.isFile()) {
+            var fileExt = path.extname(filename).toLowerCase();
+            if ('.ts' == fileExt) {
+                doTranslateFile(filePath);
             }
-        });
-    });
+        }
+        else {
+            readDir(filePath);
+        }
+    }
+}
+function doTranslateFile(filePath) {
+    // console.log('parsing: ', filePath);
+    var fileContent = fs.readFileSync(filePath, 'utf-8');
+    var parsed = parser.parse(fileContent);
+    var outFilePath = filePath.replace(inputFolder, outputFolder);
+    var fileFolder = outFilePath.substr(0, outFilePath.lastIndexOf('\\'));
+    fs.mkdirSync(fileFolder, { recursive: true });
+    if (saveASTFile) {
+        var str = util.inspect(parsed, true, 100);
+        fs.writeFileSync(outFilePath.replace(/\.ts$/, '.txt'), str);
+    }
+    var luaContent = lm.toLua(parsed);
+    var luaFilePath = outFilePath.replace(/\.ts$/, '.lua');
+    fs.writeFileSync(luaFilePath, luaContent);
 }
