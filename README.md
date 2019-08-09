@@ -16,6 +16,21 @@ const luaCode = ts2lua.translate(tsCode);
 console.log(luaCode);
 ```
 
+TypeScript
+```TypeScript
+import ts2lua = require('ts2lua');
+
+let testCode = `
+let num = 123;
+if(num > 100) {
+  console.log(num + ' is bigger than 100!');
+} else {
+  console.log(num + ' is smaller than 100!');
+}
+`
+console.log(ts2lua.translate(testCode));
+```
+
 批量转换TypeScript文件
 
 ```JavaScript
