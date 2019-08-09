@@ -8,7 +8,7 @@ const luaFilesToCopy: string[] = ['class.lua', 'trycatch.lua'];
 
 let inputFolder: string;
 let outputFolder: string;
-translateFiles('G:\\ly\\trunk\\TsScripts', 'test\\out');
+// translateFiles('G:\\ly\\trunk\\TsScripts', 'test\\out');
 
 export interface TranslateOption {
   ext?: string
@@ -34,6 +34,7 @@ let luaExt: string = '.lua';
  */
 export function translateFiles(inputPath: string, outputPath: string, option?: TranslateOption) {
   // copy class.lua & trycatch.lua
+  fs.mkdirSync(outputPath, { recursive: true });
   for(let luaFile of luaFilesToCopy) {
     fs.copyFileSync('lua/' + luaFile, path.join(outputPath, luaFile));
   }

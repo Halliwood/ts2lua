@@ -15,7 +15,6 @@ var lm = __importStar(require("./gen/LuaMaker"));
 var luaFilesToCopy = ['class.lua', 'trycatch.lua'];
 var inputFolder;
 var outputFolder;
-translateFiles('G:\\ly\\trunk\\TsScripts', 'test\\out');
 /**
  * Translate the input code string.
  * @param tsCode input code string.
@@ -35,6 +34,7 @@ var luaExt = '.lua';
  */
 function translateFiles(inputPath, outputPath, option) {
     // copy class.lua & trycatch.lua
+    fs.mkdirSync(outputPath, { recursive: true });
     for (var _i = 0, luaFilesToCopy_1 = luaFilesToCopy; _i < luaFilesToCopy_1.length; _i++) {
         var luaFile = luaFilesToCopy_1[_i];
         fs.copyFileSync('lua/' + luaFile, path.join(outputPath, luaFile));
