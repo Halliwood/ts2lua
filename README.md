@@ -23,6 +23,8 @@ const ts2lua = require('ts2lua');
 const inputPath = 'ts_file_root';
 conse outputPath = 'lua_file_root';
 ts2lua.translateFiles(inputPath, outputPath);
+// 指定生成lua文件后缀名
+ts2lua.translateFiles(inputPath, outputPath, { ext: '.lua.txt' });
 ```
 
 ## 关于变量名、函数名不符合lua规范的处理

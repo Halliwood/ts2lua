@@ -3,47 +3,72 @@
 // Definitions by: Halliwood <https://github.com/Halliwood> 
 // Definitions: https://github.com/borisyankov/DefinitelyTyped
 
-/**
- * 
- */
-export declare var fs : /*no type*/{};
+export interface TranslateOption {
+  ext?: string
+}
 
 /**
  * 
  */
-export declare var lm : /*no type*/{};
+declare var fs : /*no type*/{};
+
+/**
+ * 
+ */
+declare var lm : /*no type*/{};
+
+/**
+ * 
+ */
+declare var luaFilesToCopy : Array<string>;
+
+/**
+ * 
+ */
+declare var inputFolder : string;
+
+/**
+ * 
+ */
+declare var outputFolder : string;
 
 /**
  * Translate the input code string.
  * @param tsCode input code string.
  */
-declare function translate(tsCode : any): void;
+export declare function translate(tsCode : string): string;
 
 /**
  * 
  */
-export declare var saveASTFile : boolean;
+declare var devMode : boolean;
 
 /**
  * 
  */
-export declare var fileCnt : number;
+declare var fileCnt : number;
+
+/**
+ * 
+ */
+declare var luaExt : string;
 
 /**
  * Translate typescript files from the given input path and write lua files into the given output path.
  * @param inputPath input path which contains typescript files to translate.
  * @param outputPath output path where to write lua files into.
+ * @param option translate option
  */
-declare function translateFiles(inputPath : any, outputPath : any): void;
+export declare function translateFiles(inputPath : string, outputPath : string, option : TranslateOption): void;
 
 /**
  * 
  * @param dirPath 
  */
-declare function readDir(dirPath : any): void;
+declare function readDir(dirPath : string): void;
 
 /**
  * 
  * @param filePath 
  */
-declare function doTranslateFile(filePath : any): void;
+declare function doTranslateFile(filePath : string): void;

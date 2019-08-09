@@ -8,7 +8,11 @@ const luaFilesToCopy: string[] = ['class.lua', 'trycatch.lua'];
 
 let inputFolder: string;
 let outputFolder: string;
-// translateFiles('G:\\ly\\trunk\\TsScripts', 'test\\out');
+translateFiles('G:\\ly\\trunk\\TsScripts', 'test\\out');
+
+export interface TranslateOption {
+  ext?: string
+}
 
 /**
  * Translate the input code string.
@@ -19,20 +23,23 @@ export function translate(tsCode: string): string {
   return lm.toLua(parsed, 'Source', devMode);
 }
 
-// let inputFolder: string;
-// let outputFolder: string;
 const devMode: boolean = false;
 let fileCnt = 0;
+let luaExt: string = '.lua';
 
 /**
  * Translate typescript files from the given input path and write lua files into the given output path.
  * @param inputPath input path which contains typescript files to translate.
  * @param outputPath output path where to write lua files into.
  */
-export function translateFiles(inputPath: string, outputPath: string) {
+export function translateFiles(inputPath: string, outputPath: string, option?: TranslateOption) {
   // copy class.lua & trycatch.lua
   for(let luaFile of luaFilesToCopy) {
     fs.copyFileSync('lua/' + luaFile, path.join(outputPath, luaFile));
+  }
+
+  if(option && option.ext) {
+    luaExt = option.ext;
   }
 
   inputFolder = inputPath;
@@ -79,7 +86,7 @@ function doTranslateFile(filePath: string) {
   }
 
   let luaContent = lm.toLua(parsed, filePath, devMode);
-  let luaFilePath = outFilePath.replace(/\.ts$/, '.lua');
+  let luaFilePath = outFilePath.replace(/\.ts$/, luaExt);
   fs.writeFileSync(luaFilePath, luaContent);  
 
   fileCnt++;
