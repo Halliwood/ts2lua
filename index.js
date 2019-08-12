@@ -19,32 +19,32 @@ var luaTemlates = {
 };
 var inputFolder;
 var outputFolder;
+var devMode = false;
+var fileCnt = 0;
+var luaExt = '.lua';
+var luaStyle = 'xlua';
 /**
  * Translate the input code string.
  * @param tsCode input code string.
  */
-function translate(tsCode) {
+function translate(tsCode, option) {
+    processOption(option);
     var parsed = parser.parse(tsCode);
-    return lm.toLua(parsed, 'Source', devMode);
+    return lm.toLua(parsed, 'Source', devMode, luaStyle);
 }
 exports.translate = translate;
-var devMode = false;
-var fileCnt = 0;
-var luaExt = '.lua';
 /**
  * Translate typescript files from the given input path and write lua files into the given output path.
  * @param inputPath input path which contains typescript files to translate.
  * @param outputPath output path where to write lua files into.
  */
 function translateFiles(inputPath, outputPath, option) {
+    processOption(option);
     // copy class.lua & trycatch.lua
     fs.mkdirSync(outputPath, { recursive: true });
     for (var _i = 0, luaFilesToCopy_1 = luaFilesToCopy; _i < luaFilesToCopy_1.length; _i++) {
         var luaFile = luaFilesToCopy_1[_i];
         fs.writeFileSync(path.join(outputPath, luaFile) + luaExt, luaTemlates[luaFile]);
-    }
-    if (option && option.ext) {
-        luaExt = option.ext;
     }
     inputFolder = inputPath;
     outputFolder = outputPath;
@@ -87,8 +87,16 @@ function doTranslateFile(filePath) {
         var str = util.inspect(parsed, true, 100);
         fs.writeFileSync(outFilePath.replace(/\.ts$/, '.txt'), str);
     }
-    var luaContent = lm.toLua(parsed, filePath, devMode);
+    var luaContent = lm.toLua(parsed, filePath, devMode, luaStyle);
     var luaFilePath = outFilePath.replace(/\.ts$/, luaExt);
     fs.writeFileSync(luaFilePath, luaContent);
     fileCnt++;
+}
+function processOption(option) {
+    if (option) {
+        if (option.ext) {
+            luaExt = option.ext;
+        }
+        luaStyle = option.style;
+    }
 }

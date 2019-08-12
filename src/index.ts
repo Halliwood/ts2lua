@@ -111,21 +111,25 @@ let outputFolder: string;
 // translateFiles('G:\\ly\\trunk\\TsScripts', 'test\\out');
 
 export interface TranslateOption {
-  ext?: string
-}
-
-/**
- * Translate the input code string.
- * @param tsCode input code string.
- */
-export function translate(tsCode: string): string {
-  const parsed = parser.parse(tsCode);
-  return lm.toLua(parsed, 'Source', devMode);
+  ext?: string, 
+  style?: 'xlua' | null
 }
 
 const devMode: boolean = false;
 let fileCnt = 0;
 let luaExt: string = '.lua';
+let luaStyle: string = 'xlua';
+
+/**
+ * Translate the input code string.
+ * @param tsCode input code string.
+ */
+export function translate(tsCode: string, option?: TranslateOption): string {
+  processOption(option);
+
+  const parsed = parser.parse(tsCode);
+  return lm.toLua(parsed, 'Source', devMode, luaStyle);
+}
 
 /**
  * Translate typescript files from the given input path and write lua files into the given output path.
@@ -133,14 +137,12 @@ let luaExt: string = '.lua';
  * @param outputPath output path where to write lua files into.
  */
 export function translateFiles(inputPath: string, outputPath: string, option?: TranslateOption) {
+  processOption(option);
+
   // copy class.lua & trycatch.lua
   fs.mkdirSync(outputPath, { recursive: true });
   for(let luaFile of luaFilesToCopy) {
     fs.writeFileSync(path.join(outputPath, luaFile) + luaExt, luaTemlates[luaFile]);
-  }
-
-  if(option && option.ext) {
-    luaExt = option.ext;
   }
 
   inputFolder = inputPath;
@@ -186,9 +188,18 @@ function doTranslateFile(filePath: string) {
     fs.writeFileSync(outFilePath.replace(/\.ts$/, '.txt'), str);
   }
 
-  let luaContent = lm.toLua(parsed, filePath, devMode);
+  let luaContent = lm.toLua(parsed, filePath, devMode, luaStyle);
   let luaFilePath = outFilePath.replace(/\.ts$/, luaExt);
   fs.writeFileSync(luaFilePath, luaContent);  
 
   fileCnt++;
+}
+
+function processOption(option?: TranslateOption) {
+  if(option) {
+    if(option.ext) {
+      luaExt = option.ext;
+    }
+    luaStyle = option.style;
+  }
 }

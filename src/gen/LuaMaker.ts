@@ -138,10 +138,12 @@ let hasContinue = false;
 
 let filePath: string;
 let isDevMode = false;
+let luaStyle = 'xlua';
 
-export function toLua(ast: any, path: string, devMode: boolean): string {
+export function toLua(ast: any, path: string, devMode: boolean, style: string): string {
   filePath = path;
   isDevMode = devMode;
+  luaStyle = style;
 
   importContents.length = 0;
   allClasses.length = 0;
@@ -1012,6 +1014,9 @@ export function codeFromLogicalExpression(ast: LogicalExpression): string {
 
 export function codeFromMemberExpression(ast: MemberExpression): string {
   let str = codeFromAST(ast.object);
+  if('xlua' == luaStyle && str == 'UnityEngine') {
+    str = 'CS.UnityEngine';
+  }
   if (noBraceTypes.indexOf(ast.object.type) < 0) {
     str = '(' + str + ')';
   }

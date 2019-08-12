@@ -122,9 +122,11 @@ var moduleQueue = [];
 var hasContinue = false;
 var filePath;
 var isDevMode = false;
-function toLua(ast, path, devMode) {
+var luaStyle = 'xlua';
+function toLua(ast, path, devMode, style) {
     filePath = path;
     isDevMode = devMode;
+    luaStyle = style;
     importContents.length = 0;
     allClasses.length = 0;
     classQueue.length = 0;
@@ -920,6 +922,9 @@ function codeFromLogicalExpression(ast) {
 exports.codeFromLogicalExpression = codeFromLogicalExpression;
 function codeFromMemberExpression(ast) {
     var str = codeFromAST(ast.object);
+    if ('xlua' == luaStyle && str == 'UnityEngine') {
+        str = 'CS.UnityEngine';
+    }
     if (noBraceTypes.indexOf(ast.object.type) < 0) {
         str = '(' + str + ')';
     }

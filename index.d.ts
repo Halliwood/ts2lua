@@ -4,7 +4,8 @@
 // Definitions: https://github.com/borisyankov/DefinitelyTyped
 
 export interface TranslateOption {
-  ext?: string
+  ext?: string, 
+  style?: 'xlua' | null
 }
 
 /**
@@ -36,7 +37,7 @@ declare var outputFolder : string;
  * Translate the input code string.
  * @param tsCode input code string.
  */
-export declare function translate(tsCode : string): string;
+export declare function translate(tsCode : string, option ?: TranslateOption): string;
 
 /**
  * 
@@ -59,7 +60,7 @@ declare var luaExt : string;
  * @param outputPath output path where to write lua files into.
  * @param option translate option
  */
-export declare function translateFiles(inputPath : string, outputPath : string, option : TranslateOption): void;
+export declare function translateFiles(inputPath : string, outputPath : string, option ?: TranslateOption): void;
 
 /**
  * 
