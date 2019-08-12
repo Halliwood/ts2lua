@@ -847,10 +847,10 @@ export function codeFromFunctionDeclaration(ast: FunctionDeclaration): string {
 }
 
 export function codeFromFunctionExpression(ast: FunctionExpression): string {
-  return codeFromFunctionExpressionInternal(null, ast);
+  return codeFromFunctionExpressionInternal(null, false, ast);
 }
 
-function codeFromFunctionExpressionInternal(funcName: string, ast: FunctionExpression): string {
+function codeFromFunctionExpressionInternal(funcName: string, isStatic: boolean, ast: FunctionExpression): string {
   let str = '';
   if(!funcName && ast.id) {
     funcName = codeFromAST(ast.id);
@@ -862,7 +862,11 @@ function codeFromFunctionExpressionInternal(funcName: string, ast: FunctionExpre
     let className = classQueue[classQueue.length - 1];
     if (className) {
       // 成员函数
-      str = 'function ' + className + '.prototype:' + funcName + '(';
+      if(isStatic) {
+        str = 'function ' + className + '.' + funcName + '(';
+      } else {
+        str = 'function ' + className + '.prototype:' + funcName + '(';
+      }
     } else {
       let moduleName = moduleQueue[moduleQueue.length - 1];
       if(moduleName) {
@@ -1055,7 +1059,7 @@ export function codeFromMethodDefinition(ast: MethodDefinition): string {
   if(ast.value.type == "TSEmptyBodyFunctionExpression") {
     assert(false, ast, 'Not support TSEmptyBodyFunctionExpression yet!');
   }
-  return codeFromFunctionExpressionInternal(funcName, ast.value as FunctionExpression);
+  return codeFromFunctionExpressionInternal(funcName, ast.static, ast.value as FunctionExpression);
 }
 
 export function codeFromNewExpression(ast: NewExpression): string {

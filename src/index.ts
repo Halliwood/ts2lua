@@ -4,9 +4,9 @@ import util = require('util')
 import parser = require('@typescript-eslint/typescript-estree');
 import * as lm from './gen/LuaMaker';
 
-const luaFilesToCopy: string[] = ['class.lua', 'trycatch.lua'];
+const luaFilesToCopy: string[] = ['class', 'trycatch'];
 const luaTemlates: {[name: string]: string} = {
-  'class.lua': `Class = {};
+  'class': `Class = {};
 Class.__index = Class
 
 Class.name = "Object";
@@ -77,7 +77,7 @@ Class.prototype.instanceof = function(instance, typeClass)
   end
   return false
 end`,
-  'trycatch.lua': `-- 异常捕获
+  'trycatch': `-- 异常捕获
 function try_catch(block)
   local main = block.main
   local catch = block.catch
@@ -136,7 +136,7 @@ export function translateFiles(inputPath: string, outputPath: string, option?: T
   // copy class.lua & trycatch.lua
   fs.mkdirSync(outputPath, { recursive: true });
   for(let luaFile of luaFilesToCopy) {
-    fs.writeFileSync(path.join(outputPath, luaFile), luaTemlates[luaFile]);
+    fs.writeFileSync(path.join(outputPath, luaFile) + luaExt, luaTemlates[luaFile]);
   }
 
   if(option && option.ext) {
