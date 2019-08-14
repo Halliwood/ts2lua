@@ -653,6 +653,8 @@ export function codeFromCallExpression(ast: CallExpression): string {
   if(calleeStr.match(/:push$/)) {
     // Array push change into table.concat
     str += 'table.concat(' + calleeStr.substr(0, calleeStr.length - 5) + ', ' + allAgmStr + ')';
+  } else if('xlua' == luaStyle && !allAgmStr && calleeStr.match(/:GetType$/)) {
+    str = 'typeof(' + calleeStr.substr(0, calleeStr.length - 8) + ')';
   } else {
     str = calleeStr + '(';
     str += allAgmStr;
@@ -1039,13 +1041,14 @@ export function codeFromMemberExpression(ast: MemberExpression): string {
       }
     } else {
       // TODO: do something with static members
+      let pstr = codeFromAST(ast.property);
       let parent = (ast as any).__parent;
       if(parent && parent.type == AST_NODE_TYPES.CallExpression) {
         str += ':';
       } else {
         str += '.';
       }
-      str += codeFromAST(ast.property);
+      str += pstr;
     }
   }
   return str;

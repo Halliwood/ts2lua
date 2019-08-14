@@ -555,6 +555,9 @@ function codeFromCallExpression(ast) {
         // Array push change into table.concat
         str += 'table.concat(' + calleeStr.substr(0, calleeStr.length - 5) + ', ' + allAgmStr + ')';
     }
+    else if ('xlua' == luaStyle && !allAgmStr && calleeStr.match(/:GetType$/)) {
+        str = 'typeof(' + calleeStr.substr(0, calleeStr.length - 8) + ')';
+    }
     else {
         str = calleeStr + '(';
         str += allAgmStr;
@@ -951,6 +954,7 @@ function codeFromMemberExpression(ast) {
         }
         else {
             // TODO: do something with static members
+            var pstr = codeFromAST(ast.property);
             var parent_1 = ast.__parent;
             if (parent_1 && parent_1.type == typescript_estree_1.AST_NODE_TYPES.CallExpression) {
                 str += ':';
@@ -958,7 +962,7 @@ function codeFromMemberExpression(ast) {
             else {
                 str += '.';
             }
-            str += codeFromAST(ast.property);
+            str += pstr;
         }
     }
     return str;
