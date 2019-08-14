@@ -1,6 +1,6 @@
 {
   "name": "ts2lua",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Change typescript to lua.",
   "main": "index.js",
   "types": "index.d.ts",

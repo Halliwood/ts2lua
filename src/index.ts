@@ -200,6 +200,8 @@ function processOption(option?: TranslateOption) {
     if(option.ext) {
       luaExt = option.ext;
     }
-    luaStyle = option.style;
+    if(undefined !== option.style) {
+      luaStyle = option.style;
+    }
   }
 }
