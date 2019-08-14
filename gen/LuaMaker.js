@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var typescript_estree_1 = require("@typescript-eslint/typescript-estree");
 var util = require("util");
+var path = require("path");
 var noBraceTypes = [typescript_estree_1.AST_NODE_TYPES.MemberExpression, typescript_estree_1.AST_NODE_TYPES.ThisExpression, typescript_estree_1.AST_NODE_TYPES.Identifier, typescript_estree_1.AST_NODE_TYPES.CallExpression, typescript_estree_1.AST_NODE_TYPES.TSAsExpression];
 // TODO: Typeof's return value may be different between ts and lua
 var tsType2luaType = {
@@ -123,8 +124,8 @@ var hasContinue = false;
 var filePath;
 var isDevMode = false;
 var luaStyle = 'xlua';
-function toLua(ast, path, devMode, style) {
-    filePath = path;
+function toLua(ast, pfilePath, rootPath, devMode, style) {
+    filePath = pfilePath;
     isDevMode = devMode;
     luaStyle = style;
     importContents.length = 0;
@@ -140,6 +141,9 @@ function toLua(ast, path, devMode, style) {
     var outStr = '';
     for (var _i = 0, importContents_1 = importContents; _i < importContents_1.length; _i++) {
         var p = importContents_1[_i];
+        if (p.indexOf('./') == 0 || p.indexOf('../') == 0) {
+            p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace('\\', '/');
+        }
         outStr += 'require("' + p + '")\n';
     }
     if (outStr) {

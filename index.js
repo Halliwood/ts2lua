@@ -30,7 +30,7 @@ var luaStyle = 'xlua';
 function translate(tsCode, option) {
     processOption(option);
     var parsed = parser.parse(tsCode);
-    return lm.toLua(parsed, 'Source', devMode, luaStyle);
+    return lm.toLua(parsed, 'Source', '', devMode, luaStyle);
 }
 exports.translate = translate;
 /**
@@ -87,7 +87,7 @@ function doTranslateFile(filePath) {
         var str = util.inspect(parsed, true, 100);
         fs.writeFileSync(outFilePath.replace(/\.ts$/, '.txt'), str);
     }
-    var luaContent = lm.toLua(parsed, filePath, devMode, luaStyle);
+    var luaContent = lm.toLua(parsed, filePath, inputFolder, devMode, luaStyle);
     var luaFilePath = outFilePath.replace(/\.ts$/, luaExt);
     fs.writeFileSync(luaFilePath, luaContent);
     fileCnt++;

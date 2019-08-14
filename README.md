@@ -42,6 +42,34 @@ ts2lua.translateFiles(inputPath, outputPath);
 ts2lua.translateFiles(inputPath, outputPath, { ext: '.lua.txt' });
 ```
 
+## 批量转换接口的说明
+使用`translateFiles`可以批量转换TypeScript代码。先来看看index.d.ts的声明：
+
+```TypeScript
+/**
+ * Translate typescript files from the given input path and write lua files into the given output path.
+ * @param inputPath input path which contains typescript files to translate.
+ * @param outputPath output path where to write lua files into.
+ * @param option translate option
+ */
+export declare function translateFiles(inputPath : string, outputPath : string, option ?: TranslateOption): void;
+```
+
+其中，必选参数`inputPath`和`outputPath`分别表示TypeScript文件目录和生成的lua文件目录。必选参数`option`表示转换选项，当前支持如下选项：
+
+```TypeScript
+export interface TranslateOption {
+  ext?: string, 
+  style?: 'xlua' | null
+}
+```
+
+可选字段`ext`表示生成lua文件后缀，比如可以指定为`.lua.txt`。可选字段`style`表示生成lua代码的风格，默认是xlua风格，ts2lua会按照xlua的一些规范生成对应的lua代码，详细见下方说明。如果不使用xlua风格，请设置`style`为`null`，如下所示：
+
+```JavaScript
+ts2lua.translateFiles('in', 'out', { style: null });
+```
+
 ## 关于变量名、函数名不符合lua规范的处理
 如果变量名、函数名为lua关键字，则自动添加`tsvar_`的前缀。如果包含`$`等lua不支持的字符，则自动将`$`替换为`tsvar_`。
 
@@ -219,6 +247,12 @@ ts2lua使用了[模拟实现lua try-catch](lua/trycatch.lua "trycatch.lua定义"
 * lua不支持的操作符，比如`in`。
 * 使用中文作为key的Object。
 * TypeScript中一些常用的方法，比如`split`、`indexOf`等。
+
+## 关于xlua模式的说明
+xlua模式下，会针对xlua规范对生成的lua代码进行处理：
+* `UnityEngine.XXX`将会转换为`CS.UnityEngine.XXX`
+* `UnityEngine.XXX.GetType()`将会被转换为`typeof(CS.UnityEngine.XXX)`
+
 
 ## 注意
 ts2lua可以将TypeScipt代码转化为lua代码并尽可能保证转换完成后代码的正确性。由于语法之间的差异性，部分难以使用通用规则进行转换的语句，ts2lua将在可能有疑义的地方加上以`-[ts2lua]`标记开头的注释，以便提示您进行手动确认。建议转化完成后全局搜索`[ts2lua]`一一确认。

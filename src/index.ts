@@ -128,7 +128,7 @@ export function translate(tsCode: string, option?: TranslateOption): string {
   processOption(option);
 
   const parsed = parser.parse(tsCode);
-  return lm.toLua(parsed, 'Source', devMode, luaStyle);
+  return lm.toLua(parsed, 'Source', '', devMode, luaStyle);
 }
 
 /**
@@ -188,7 +188,7 @@ function doTranslateFile(filePath: string) {
     fs.writeFileSync(outFilePath.replace(/\.ts$/, '.txt'), str);
   }
 
-  let luaContent = lm.toLua(parsed, filePath, devMode, luaStyle);
+  let luaContent = lm.toLua(parsed, filePath, inputFolder, devMode, luaStyle);
   let luaFilePath = outFilePath.replace(/\.ts$/, luaExt);
   fs.writeFileSync(luaFilePath, luaContent);  
 

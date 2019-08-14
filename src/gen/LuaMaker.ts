@@ -1,6 +1,7 @@
 import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration, BindingName, TSAsExpression, TSInterfaceDeclaration, TSTypeAssertion, TSModuleDeclaration, TSModuleBlock, TSDeclareFunction, TSAbstractMethodDefinition, BaseNode } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
 import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree';
-import util = require('util')
+import util = require('util');
+import path = require('path');
 
 const noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier, AST_NODE_TYPES.CallExpression, AST_NODE_TYPES.TSAsExpression];
 
@@ -140,8 +141,8 @@ let filePath: string;
 let isDevMode = false;
 let luaStyle = 'xlua';
 
-export function toLua(ast: any, path: string, devMode: boolean, style: string): string {
-  filePath = path;
+export function toLua(ast: any, pfilePath: string, rootPath: string, devMode: boolean, style: string): string {
+  filePath = pfilePath;
   isDevMode = devMode;
   luaStyle = style;
 
@@ -157,6 +158,9 @@ export function toLua(ast: any, path: string, devMode: boolean, style: string): 
   importContents.sort();
   let outStr = '';
   for(let p of importContents) {
+    if(p.indexOf('./') == 0 || p.indexOf('../') == 0) {
+      p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace('\\', '/');
+    } 
     outStr += 'require("' + p + '")\n';
   }
   if(outStr) {
