@@ -131,6 +131,8 @@ function calPriority(ast: any) {
   return ast.__calPriority;
 }
 
+let usedIdMap: { [id: string]: boolean } = {}
+let importAsts: ImportDeclaration[] = [];
 let importContents: string[] = [];
 let allClasses: string[] = [];
 let classQueue: string[] = [];
@@ -146,7 +148,9 @@ export function toLua(ast: any, pfilePath: string, rootPath: string, devMode: bo
   isDevMode = devMode;
   luaStyle = style;
 
+  usedIdMap = {};
   importContents.length = 0;
+  importAsts.length = 0;
   allClasses.length = 0;
   classQueue.length = 0;
   let content = codeFromAST(ast);
@@ -155,11 +159,26 @@ export function toLua(ast: any, pfilePath: string, rootPath: string, devMode: bo
   if(allClasses.length > 0) {
     importContents.push('class');
   }
+  for(let ia of importAsts) {
+    let importIsUsed = false;
+    for(let s of ia.specifiers) {
+      if(usedIdMap[s.local.name]) {
+        importIsUsed = true;
+        break;
+      }
+    }
+    if(importIsUsed) {
+      let p = (ia.source as Literal).value as string;
+      if(importContents.indexOf(p) < 0) {
+        importContents.push(p);
+      }
+    }
+  }
   importContents.sort();
   let outStr = '';
   for(let p of importContents) {
     if(p.indexOf('./') == 0 || p.indexOf('../') == 0) {
-      p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace('\\', '/');
+      p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace(/\\+/g, '/');
     } 
     outStr += 'require("' + p + '")\n';
   }
@@ -934,6 +953,7 @@ export function codeFromIdentifier(ast: Identifier): string {
   } else if(str.substr(0, 1) == '$') {
     str = 'tsvar_' + str.substr(1);
   }
+  usedIdMap[str] = true;
   return str;
 }
 
@@ -942,8 +962,14 @@ export function codeFromIfStatement(ast: IfStatement): string {
   let str = 'if ' + testStr + ' then\n';
   str += indent(codeFromAST(ast.consequent));
   if (ast.alternate) {
-    str += '\nelse\n';
-    str += indent(codeFromAST(ast.alternate));
+    str += '\nelse';
+    let altStr = codeFromAST(ast.alternate);
+    if(ast.alternate.type != AST_NODE_TYPES.IfStatement) {
+      str += '\n';
+      str += indent(altStr);
+    } else {
+      str += ' ' + altStr;
+    }
   }
   str += '\nend';
   return str;
@@ -955,10 +981,7 @@ export function codeFromImport(ast: Import): string {
 }
 
 export function codeFromImportDeclaration(ast: ImportDeclaration): string {
-  let p = (ast.source as Literal).value as string;
-  if(importContents.indexOf(p) < 0) {
-    importContents.push(p);
-  }
+  importAsts.push(ast);
   return '';
 }
 

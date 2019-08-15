@@ -116,6 +116,8 @@ function calPriority(ast) {
     }
     return ast.__calPriority;
 }
+var usedIdMap = {};
+var importAsts = [];
 var importContents = [];
 var allClasses = [];
 var classQueue = [];
@@ -128,7 +130,9 @@ function toLua(ast, pfilePath, rootPath, devMode, style) {
     filePath = pfilePath;
     isDevMode = devMode;
     luaStyle = style;
+    usedIdMap = {};
     importContents.length = 0;
+    importAsts.length = 0;
     allClasses.length = 0;
     classQueue.length = 0;
     var content = codeFromAST(ast);
@@ -137,12 +141,29 @@ function toLua(ast, pfilePath, rootPath, devMode, style) {
     if (allClasses.length > 0) {
         importContents.push('class');
     }
+    for (var _i = 0, importAsts_1 = importAsts; _i < importAsts_1.length; _i++) {
+        var ia = importAsts_1[_i];
+        var importIsUsed = false;
+        for (var _a = 0, _b = ia.specifiers; _a < _b.length; _a++) {
+            var s = _b[_a];
+            if (usedIdMap[s.local.name]) {
+                importIsUsed = true;
+                break;
+            }
+        }
+        if (importIsUsed) {
+            var p = ia.source.value;
+            if (importContents.indexOf(p) < 0) {
+                importContents.push(p);
+            }
+        }
+    }
     importContents.sort();
     var outStr = '';
-    for (var _i = 0, importContents_1 = importContents; _i < importContents_1.length; _i++) {
-        var p = importContents_1[_i];
+    for (var _c = 0, importContents_1 = importContents; _c < importContents_1.length; _c++) {
+        var p = importContents_1[_c];
         if (p.indexOf('./') == 0 || p.indexOf('../') == 0) {
-            p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace('\\', '/');
+            p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace(/\\+/g, '/');
         }
         outStr += 'require("' + p + '")\n';
     }
@@ -842,6 +863,7 @@ function codeFromIdentifier(ast) {
     else if (str.substr(0, 1) == '$') {
         str = 'tsvar_' + str.substr(1);
     }
+    usedIdMap[str] = true;
     return str;
 }
 exports.codeFromIdentifier = codeFromIdentifier;
@@ -850,8 +872,15 @@ function codeFromIfStatement(ast) {
     var str = 'if ' + testStr + ' then\n';
     str += indent(codeFromAST(ast.consequent));
     if (ast.alternate) {
-        str += '\nelse\n';
-        str += indent(codeFromAST(ast.alternate));
+        str += '\nelse';
+        var altStr = codeFromAST(ast.alternate);
+        if (ast.alternate.type != typescript_estree_1.AST_NODE_TYPES.IfStatement) {
+            str += '\n';
+            str += indent(altStr);
+        }
+        else {
+            str += ' ' + altStr;
+        }
     }
     str += '\nend';
     return str;
@@ -863,10 +892,7 @@ function codeFromImport(ast) {
 }
 exports.codeFromImport = codeFromImport;
 function codeFromImportDeclaration(ast) {
-    var p = ast.source.value;
-    if (importContents.indexOf(p) < 0) {
-        importContents.push(p);
-    }
+    importAsts.push(ast);
     return '';
 }
 exports.codeFromImportDeclaration = codeFromImportDeclaration;
