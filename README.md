@@ -224,6 +224,9 @@ ts2lua仅仅将`==`和`!=`转换为lua对应的`==`和`~=`，不会进行任何�
 ## 关于try-catch的处理
 ts2lua使用了[模拟实现lua try-catch](lua/trycatch.lua "trycatch.lua定义")来转换TypeScript的try-catch语句。
 
+## 三元表达式的处理
+`a ? b : c`将转换为`(a and {b} or {c})[1]`。
+
 ## 关于正则表达式的处理
 由于lua不适用POSIX规范的正则表达式，因此写法上与TypeScript存在很多的差异和限制。部分TypeScript正则表达式的特效并无法简单地在lua中实现，比如lookahead和lookbehind。因此ts2lua不对正则表达式进行处理，在生成lua代码时插入如下注释，请搜索该注释并手动处理。
 
@@ -236,6 +239,9 @@ ts2lua使用了[模拟实现lua try-catch](lua/trycatch.lua "trycatch.lua定义"
 ## for循环的处理
 对于常见的ts for循环，最直接与之对应的应该是lua的for的循环。但为了确保转换结果“总是”正确的，for循环总是转化为repeat...until结构。
 
+## in操作符的处理
+`A in B`将转换为`B[A]`。
+
 ## 以下语句不生成对应lua代码
 * ExportDefaultDeclaration - 默认导出声明。
 * TSDeclareFunction - 函数声明。
@@ -244,7 +250,6 @@ ts2lua使用了[模拟实现lua try-catch](lua/trycatch.lua "trycatch.lua定义"
 ## 以下语句不进行处理
 * 正则表达式。
 * 使用了自增/自减的复杂语句，比如`a = b++`、`a = arr[b++]`等。
-* lua不支持的操作符，比如`in`。
 * 使用中文作为key的Object。
 * TypeScript中一些常用的方法，比如`split`、`indexOf`等。
 
