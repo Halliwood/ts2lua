@@ -5,7 +5,8 @@
 
 export interface TranslateOption {
   ext?: string, 
-  style?: 'xlua' | null
+  style?: 'xlua' | null, 
+  requireAllInOne?: boolean
 }
 
 /**

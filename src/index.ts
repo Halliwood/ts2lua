@@ -112,13 +112,16 @@ let outputFolder: string;
 
 export interface TranslateOption {
   ext?: string, 
-  style?: 'xlua' | null
+  style?: 'xlua' | null, 
+  requireAllInOne?: boolean
 }
 
 const devMode: boolean = false;
 let fileCnt = 0;
 let luaExt: string = '.lua';
 let luaStyle: string = 'xlua';
+let requireAllInOne: boolean = false;
+let requireContent = '';
 
 /**
  * Translate the input code string.
@@ -128,7 +131,7 @@ export function translate(tsCode: string, option?: TranslateOption): string {
   processOption(option);
 
   const parsed = parser.parse(tsCode);
-  return lm.toLua(parsed, 'Source', '', devMode, luaStyle);
+  return lm.toLua(parsed, 'Source', '', devMode, luaStyle, requireAllInOne);
 }
 
 /**
@@ -154,6 +157,11 @@ export function translateFiles(inputPath: string, outputPath: string, option?: T
   } else {
     readDir(inputPath);
   }
+
+  if(requireAllInOne) {
+    fs.writeFileSync(path.join(outputPath, 'require') + luaExt, requireContent);
+  }
+
   console.log("\x1B[36m%d\x1B[0m .lua files generated.", fileCnt);
 }
 
@@ -188,9 +196,14 @@ function doTranslateFile(filePath: string) {
     fs.writeFileSync(outFilePath.replace(/\.ts$/, '.txt'), str);
   }
 
-  let luaContent = lm.toLua(parsed, filePath, inputFolder, devMode, luaStyle);
+  let luaContent = lm.toLua(parsed, filePath, inputFolder, devMode, luaStyle, requireAllInOne);
   let luaFilePath = outFilePath.replace(/\.ts$/, luaExt);
-  fs.writeFileSync(luaFilePath, luaContent);  
+  fs.writeFileSync(luaFilePath, luaContent);
+
+  if(requireAllInOne) {
+    let importStr = path.relative(inputFolder, filePath).replace(/\\+/g, '/');
+    requireContent += 'require("' + importStr.substr(0, importStr.length - 3) + '")\n';
+  }
 
   fileCnt++;
 }
@@ -202,6 +215,9 @@ function processOption(option?: TranslateOption) {
     }
     if(undefined !== option.style) {
       luaStyle = option.style;
+    }
+    if(undefined !== option.requireAllInOne) {
+      requireAllInOne = option.requireAllInOne;
     }
   }
 }

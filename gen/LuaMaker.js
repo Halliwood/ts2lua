@@ -126,7 +126,7 @@ var hasContinue = false;
 var filePath;
 var isDevMode = false;
 var luaStyle = 'xlua';
-function toLua(ast, pfilePath, rootPath, devMode, style) {
+function toLua(ast, pfilePath, rootPath, devMode, style, pRequireAllInOne) {
     filePath = pfilePath;
     isDevMode = devMode;
     luaStyle = style;
@@ -135,40 +135,40 @@ function toLua(ast, pfilePath, rootPath, devMode, style) {
     importAsts.length = 0;
     allClasses.length = 0;
     classQueue.length = 0;
+    var outStr = '';
     var content = codeFromAST(ast);
     content = content.replace(/console[\.|:]log/g, 'print');
     content = formatTip(content);
-    if (allClasses.length > 0) {
-        importContents.push('class');
-    }
-    for (var _i = 0, importAsts_1 = importAsts; _i < importAsts_1.length; _i++) {
-        var ia = importAsts_1[_i];
-        var importIsUsed = false;
-        for (var _a = 0, _b = ia.specifiers; _a < _b.length; _a++) {
-            var s = _b[_a];
-            if (usedIdMap[s.local.name]) {
-                importIsUsed = true;
-                break;
+    if (!pRequireAllInOne) {
+        console.log('add import: ', filePath);
+        if (allClasses.length > 0) {
+            importContents.push('class');
+        }
+        for (var _i = 0, importAsts_1 = importAsts; _i < importAsts_1.length; _i++) {
+            var ia = importAsts_1[_i];
+            var importIsUsed = false;
+            for (var _a = 0, _b = ia.specifiers; _a < _b.length; _a++) {
+                var s = _b[_a];
+                if (usedIdMap[s.local.name]) {
+                    importIsUsed = true;
+                    break;
+                }
+            }
+            if (importIsUsed) {
+                var p = ia.source.value;
+                if (importContents.indexOf(p) < 0) {
+                    importContents.push(p);
+                }
             }
         }
-        if (importIsUsed) {
-            var p = ia.source.value;
-            if (importContents.indexOf(p) < 0) {
-                importContents.push(p);
+        importContents.sort();
+        for (var _c = 0, importContents_1 = importContents; _c < importContents_1.length; _c++) {
+            var p = importContents_1[_c];
+            if (p.indexOf('./') == 0 || p.indexOf('../') == 0) {
+                p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace(/\\+/g, '/');
             }
+            outStr += 'require("' + p + '")\n';
         }
-    }
-    importContents.sort();
-    var outStr = '';
-    for (var _c = 0, importContents_1 = importContents; _c < importContents_1.length; _c++) {
-        var p = importContents_1[_c];
-        if (p.indexOf('./') == 0 || p.indexOf('../') == 0) {
-            p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace(/\\+/g, '/');
-        }
-        outStr += 'require("' + p + '")\n';
-    }
-    if (outStr) {
-        outStr += '\n';
     }
     outStr += content;
     return outStr;

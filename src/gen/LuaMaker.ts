@@ -143,7 +143,7 @@ let filePath: string;
 let isDevMode = false;
 let luaStyle = 'xlua';
 
-export function toLua(ast: any, pfilePath: string, rootPath: string, devMode: boolean, style: string): string {
+export function toLua(ast: any, pfilePath: string, rootPath: string, devMode: boolean, style: string, pRequireAllInOne: boolean): string {
   filePath = pfilePath;
   isDevMode = devMode;
   luaStyle = style;
@@ -153,38 +153,39 @@ export function toLua(ast: any, pfilePath: string, rootPath: string, devMode: bo
   importAsts.length = 0;
   allClasses.length = 0;
   classQueue.length = 0;
+  let outStr = '';
   let content = codeFromAST(ast);
   content = content.replace(/console[\.|:]log/g, 'print');
   content = formatTip(content);
-  if(allClasses.length > 0) {
-    importContents.push('class');
-  }
-  for(let ia of importAsts) {
-    let importIsUsed = false;
-    for(let s of ia.specifiers) {
-      if(usedIdMap[s.local.name]) {
-        importIsUsed = true;
-        break;
+
+  if(!pRequireAllInOne) {
+    if(allClasses.length > 0) {
+      importContents.push('class');
+    }
+    for(let ia of importAsts) {
+      let importIsUsed = false;
+      for(let s of ia.specifiers) {
+        if(usedIdMap[s.local.name]) {
+          importIsUsed = true;
+          break;
+        }
+      }
+      if(importIsUsed) {
+        let p = (ia.source as Literal).value as string;
+        if(importContents.indexOf(p) < 0) {
+          importContents.push(p);
+        }
       }
     }
-    if(importIsUsed) {
-      let p = (ia.source as Literal).value as string;
-      if(importContents.indexOf(p) < 0) {
-        importContents.push(p);
-      }
+    importContents.sort();
+    for(let p of importContents) {
+      if(p.indexOf('./') == 0 || p.indexOf('../') == 0) {
+        p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace(/\\+/g, '/');
+      } 
+      outStr += 'require("' + p + '")\n';
     }
   }
-  importContents.sort();
-  let outStr = '';
-  for(let p of importContents) {
-    if(p.indexOf('./') == 0 || p.indexOf('../') == 0) {
-      p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace(/\\+/g, '/');
-    } 
-    outStr += 'require("' + p + '")\n';
-  }
-  if(outStr) {
-    outStr += '\n';
-  }
+  
   outStr += content;
   return outStr;
 }
