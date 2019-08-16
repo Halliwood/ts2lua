@@ -123,6 +123,7 @@ var allClasses = [];
 var classQueue = [];
 var moduleQueue = [];
 var hasContinue = false;
+var inSwitchCase = false;
 var filePath;
 var isDevMode = false;
 var luaStyle = 'xlua';
@@ -140,7 +141,6 @@ function toLua(ast, pfilePath, rootPath, devMode, style, pRequireAllInOne) {
     content = content.replace(/console[\.|:]log/g, 'print');
     content = formatTip(content);
     if (!pRequireAllInOne) {
-        console.log('add import: ', filePath);
         if (allClasses.length > 0) {
             importContents.push('class');
         }
@@ -497,6 +497,9 @@ function codeFromBinaryExpression(ast) {
     ast.left.__parent = ast;
     var left = codeFromAST(ast.left);
     var right = codeFromAST(ast.right);
+    if (optStr == 'in') {
+        return right + '[' + left + ']';
+    }
     var selffOpts = ['+=', '-=', '*=', '/=', '%=', '<<=', '>>=', '&=', '^=', '|='];
     var isSelfOperator = false;
     if (selffOpts.indexOf(optStr) >= 0) {
@@ -552,6 +555,9 @@ function codeFromBlockStatement(ast) {
 exports.codeFromBlockStatement = codeFromBlockStatement;
 function codeFromBreakStatement(ast) {
     assert(!ast.label, ast, 'Not support break label yet!');
+    if (inSwitchCase) {
+        return 'return';
+    }
     return 'break';
 }
 exports.codeFromBreakStatement = codeFromBreakStatement;
@@ -1111,7 +1117,9 @@ function codeFromSwitchCase(ast) {
             if (i > 0) {
                 csqStr += '\n';
             }
+            inSwitchCase = true;
             csqStr += codeFromAST(ast.consequent[i]);
+            inSwitchCase = false;
         }
     }
     if (csqStr) {

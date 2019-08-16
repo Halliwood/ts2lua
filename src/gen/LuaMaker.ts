@@ -138,6 +138,7 @@ let allClasses: string[] = [];
 let classQueue: string[] = [];
 let moduleQueue: string[] = [];
 let hasContinue = false;
+let inSwitchCase = false;
 
 let filePath: string;
 let isDevMode = false;
@@ -595,6 +596,10 @@ export function codeFromBinaryExpression(ast: BinaryExpression): string {
   let left = codeFromAST(ast.left);
   let right = codeFromAST(ast.right);
 
+  if(optStr == 'in') {
+    return right + '[' + left + ']';
+  }
+
   let selffOpts: string[] = ['+=', '-=', '*=', '/=', '%=', '<<=', '>>=', '&=', '^=', '|='];
   let isSelfOperator = false;
   if(selffOpts.indexOf(optStr) >= 0) {
@@ -650,7 +655,10 @@ export function codeFromBlockStatement(ast: BlockStatement): string {
 }
 
 export function codeFromBreakStatement(ast: BreakStatement): string {
-  assert(!ast.label, ast, 'Not support break label yet!')
+  assert(!ast.label, ast, 'Not support break label yet!');
+  if(inSwitchCase) {
+    return 'return';
+  }
   return 'break';
 }
 
@@ -1194,7 +1202,9 @@ export function codeFromSwitchCase(ast: SwitchCase): string {
       if(i > 0) {
         csqStr += '\n';
       }
+      inSwitchCase = true;
       csqStr += codeFromAST(ast.consequent[i]);
+      inSwitchCase = false;
     }
   }
   if(csqStr) {
