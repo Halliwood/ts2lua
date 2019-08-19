@@ -145,6 +145,9 @@ var LuaMaker = /** @class */ (function () {
         this.regexReplConf = regexReplConf;
         this.translateRegex = translateRegex;
     };
+    LuaMaker.prototype.setClassMap = function (classMap) {
+        this.classMap = classMap;
+    };
     LuaMaker.prototype.toLua = function (ast, pfilePath, rootPath) {
         this.filePath = pfilePath;
         this.usedIdMap = {};
@@ -985,7 +988,9 @@ var LuaMaker = /** @class */ (function () {
                 // TODO: do something with static members
                 var pstr = this.codeFromAST(ast.property);
                 var parent_1 = ast.__parent;
-                if (parent_1 && parent_1.type == typescript_estree_1.AST_NODE_TYPES.CallExpression && (!this.inStatic || ast.object.type != typescript_estree_1.AST_NODE_TYPES.ThisExpression)) {
+                if (parent_1 && parent_1.type == typescript_estree_1.AST_NODE_TYPES.CallExpression &&
+                    (!this.inStatic || ast.object.type != typescript_estree_1.AST_NODE_TYPES.ThisExpression) &&
+                    (!this.classMap[str] || !this.classMap[str].funcs[pstr] || !this.classMap[str].funcs[pstr].isStatic)) {
                     str += ':';
                 }
                 else {

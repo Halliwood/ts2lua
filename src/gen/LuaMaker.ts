@@ -2,6 +2,7 @@ import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpre
 import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree';
 import util = require('util');
 import path = require('path');
+import { TsClassInfo } from './TsCollector';
 
 export class LuaMaker {
   private readonly noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier, AST_NODE_TYPES.CallExpression, AST_NODE_TYPES.TSAsExpression];
@@ -138,6 +139,7 @@ export class LuaMaker {
   private usedIdMap: { [id: string]: boolean } = {}
   private importAsts: ImportDeclaration[] = [];
   private importContents: string[] = [];
+  private classMap: { [name: string]: TsClassInfo };
   private allClasses: string[] = [];
   private classQueue: string[] = [];
   private moduleQueue: string[] = [];
@@ -164,6 +166,10 @@ export class LuaMaker {
     this.funcReplConf = funcReplConf;
     this.regexReplConf = regexReplConf;
     this.translateRegex = translateRegex;
+  }
+
+  public setClassMap(classMap: { [name: string]: TsClassInfo }) {
+    this.classMap = classMap;
   }
   
   public toLua(ast: any, pfilePath: string, rootPath: string): string {
@@ -1120,7 +1126,9 @@ export class LuaMaker {
         // TODO: do something with static members
         let pstr = this.codeFromAST(ast.property);
         let parent = (ast as any).__parent;
-        if(parent && parent.type == AST_NODE_TYPES.CallExpression && (!this.inStatic || ast.object.type != AST_NODE_TYPES.ThisExpression)) {
+        if(parent && parent.type == AST_NODE_TYPES.CallExpression && 
+          (!this.inStatic || ast.object.type != AST_NODE_TYPES.ThisExpression) && 
+          (!this.classMap[str] || !this.classMap[str].funcs[pstr] || !this.classMap[str].funcs[pstr].isStatic)) {
           str += ':';
         } else {
           str += '.';

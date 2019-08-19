@@ -3,6 +3,7 @@ import path = require('path');
 import util = require('util')
 import parser = require('@typescript-eslint/typescript-estree');
 import { LuaMaker } from './gen/LuaMaker';
+import { TsCollector } from './gen/TsCollector';
 
 const luaFilesToCopy: string[] = ['class', 'trycatch'];
 const luaTemlates: {[name: string]: string} = {
@@ -141,6 +142,7 @@ let regexReplConf: {[regex: string]: string} = {};
 let translateRegex: boolean;
 let traceUnknowRegex: string;
 
+let tc = new TsCollector();
 let lm = new LuaMaker();
 
 /**
@@ -151,8 +153,11 @@ export function translate(tsCode: string, option?: TranslateOption): string {
   processOption(option);
 
   const parsed = parser.parse(tsCode);
+  tc.collect(parsed);
+  lm.setClassMap(tc.classMap);
+  let luaCode = lm.toLua(parsed, 'Source', '');
   collectUnknowRegex();
-  return lm.toLua(parsed, 'Source', '');
+  return luaCode;
 }
 
 /**
@@ -174,9 +179,15 @@ export function translateFiles(inputPath: string, outputPath: string, option?: T
   fileCnt = 0;
   let inputStat = fs.statSync(inputPath);
   if(inputStat.isFile()) {
+    collectClass(inputPath);
+    lm.setClassMap(tc.classMap);
     doTranslateFile(inputPath);
   } else {
-    readDir(inputPath);
+    console.log('Processing... Please wait.');
+    readDir(inputPath, true);
+    console.log('Making lua... Please wait.');
+    lm.setClassMap(tc.classMap);
+    readDir(inputPath, false);
   }
 
   if(requireAllInOne) {
@@ -187,7 +198,7 @@ export function translateFiles(inputPath: string, outputPath: string, option?: T
   collectUnknowRegex();
 }
 
-function readDir(dirPath: string) {
+function readDir(dirPath: string, collectOrTranslate: boolean) {
   let files = fs.readdirSync(dirPath);
   for(let i = 0, len = files.length; i < len; i++) {
     let filename = files[i];
@@ -196,12 +207,22 @@ function readDir(dirPath: string) {
     if(fileStat.isFile()) {
       let fileExt = path.extname(filename).toLowerCase();
       if('.ts' == fileExt) {
-        doTranslateFile(filePath);
+        if(collectOrTranslate) {
+          collectClass(filePath);
+        } else {
+          doTranslateFile(filePath);
+        }
       }
     } else {
-      readDir(filePath);
+      readDir(filePath, collectOrTranslate);
     }
   }
+}
+
+function collectClass(filePath: string) {
+  const fileContent = fs.readFileSync(filePath, 'utf-8');
+  const parsed = parser.parse(fileContent);
+  tc.collect(parsed);
 }
 
 function doTranslateFile(filePath: string) {

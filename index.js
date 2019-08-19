@@ -12,6 +12,7 @@ var path = require("path");
 var util = require("util");
 var parser = require("@typescript-eslint/typescript-estree");
 var LuaMaker_1 = require("./gen/LuaMaker");
+var TsCollector_1 = require("./gen/TsCollector");
 var luaFilesToCopy = ['class', 'trycatch'];
 var luaTemlates = {
     'class': "Class = {};\nClass.__index = Class\n\nClass.name = \"Object\";\n\nlocal Class_Constructor = {};\nClass_Constructor.__call = function (type, ...)\n    local instance = {};\n    instance.class = type;\n    setmetatable(instance, type.prototype);\n    instance:ctor(...)\n    return instance;\nend\nsetmetatable(Class, Class_Constructor);\nClass.__call = Class_Constructor.__call;\n\nfunction Class:subclass(typeName)\t\n  -- \u4EE5\u4F20\u5165\u7C7B\u578B\u540D\u79F0\u4F5C\u4E3A\u5168\u5C40\u53D8\u91CF\u540D\u79F0\u521B\u5EFAtable\n  _G[typeName] = {};\n\n  -- \u8BBE\u7F6E\u5143\u65B9\u6CD5__index,\u5E76\u7ED1\u5B9A\u7236\u7EA7\u7C7B\u578B\u4F5C\u4E3A\u5143\u8868\n  local subtype = _G[typeName];\n\n  subtype.name = typeName;\n  subtype.super = self;\n  subtype.__call = Class_Constructor.__call;\n  subtype.__index = subtype;\n  setmetatable(subtype, self);\n\n  -- \u521B\u5EFAprototype\u5E76\u7ED1\u5B9A\u7236\u7C7Bprototype\u4F5C\u4E3A\u5143\u8868\n  subtype.prototype = {};\n  subtype.prototype.__index = subtype.prototype;\n  subtype.prototype.__gc = self.prototype.__gc;\n  subtype.prototype.ctor = self.prototype.ctor;\n  subtype.prototype.__tostring = self.prototype.__tostring;\n  subtype.prototype.instanceof = self.prototype.instanceof;\n  setmetatable(subtype.prototype, self.prototype);\n\n  return subtype;\nend\n\nClass.prototype = {};\nClass.prototype.__index = Class.prototype;\nClass.prototype.__gc = function (instance)\n  print(instance, \"destroy\");\nend\nClass.prototype.ctor = function(instance)\nend\n\nClass.prototype.__tostring = function (instance)\t\n  return \"[\" .. instance.class.name ..\" object]\";\nend\n\nClass.prototype.instanceof = function(instance, typeClass)\n  if typeClass == nil then\n    return false\n  end\n\n  if instance.class == typeClass then\n    return true\n  end\n\n  local theSuper = instance.class.super\n  while(theSuper ~= nil) do\n    if theSuper == typeClass then\n      return true\n    end\n    theSuper = theSuper.super\n  end\n  return false\nend",
@@ -30,6 +31,7 @@ var funcReplConf = {};
 var regexReplConf = {};
 var translateRegex;
 var traceUnknowRegex;
+var tc = new TsCollector_1.TsCollector();
 var lm = new LuaMaker_1.LuaMaker();
 /**
  * Translate the input code string.
@@ -38,8 +40,11 @@ var lm = new LuaMaker_1.LuaMaker();
 function translate(tsCode, option) {
     processOption(option);
     var parsed = parser.parse(tsCode);
+    tc.collect(parsed);
+    lm.setClassMap(tc.classMap);
+    var luaCode = lm.toLua(parsed, 'Source', '');
     collectUnknowRegex();
-    return lm.toLua(parsed, 'Source', '');
+    return luaCode;
 }
 exports.translate = translate;
 /**
@@ -60,10 +65,16 @@ function translateFiles(inputPath, outputPath, option) {
     fileCnt = 0;
     var inputStat = fs.statSync(inputPath);
     if (inputStat.isFile()) {
+        collectClass(inputPath);
+        lm.setClassMap(tc.classMap);
         doTranslateFile(inputPath);
     }
     else {
-        readDir(inputPath);
+        console.log('Processing... Please wait.');
+        readDir(inputPath, true);
+        console.log('Making lua... Please wait.');
+        lm.setClassMap(tc.classMap);
+        readDir(inputPath, false);
     }
     if (requireAllInOne) {
         fs.writeFileSync(path.join(outputPath, 'require') + luaExt, requireContent);
@@ -72,7 +83,7 @@ function translateFiles(inputPath, outputPath, option) {
     collectUnknowRegex();
 }
 exports.translateFiles = translateFiles;
-function readDir(dirPath) {
+function readDir(dirPath, collectOrTranslate) {
     var files = fs.readdirSync(dirPath);
     for (var i = 0, len = files.length; i < len; i++) {
         var filename = files[i];
@@ -81,13 +92,23 @@ function readDir(dirPath) {
         if (fileStat.isFile()) {
             var fileExt = path.extname(filename).toLowerCase();
             if ('.ts' == fileExt) {
-                doTranslateFile(filePath);
+                if (collectOrTranslate) {
+                    collectClass(filePath);
+                }
+                else {
+                    doTranslateFile(filePath);
+                }
             }
         }
         else {
-            readDir(filePath);
+            readDir(filePath, collectOrTranslate);
         }
     }
+}
+function collectClass(filePath) {
+    var fileContent = fs.readFileSync(filePath, 'utf-8');
+    var parsed = parser.parse(fileContent);
+    tc.collect(parsed);
 }
 function doTranslateFile(filePath) {
     // console.log('parsing: ', filePath);
