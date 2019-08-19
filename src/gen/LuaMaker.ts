@@ -143,6 +143,7 @@ export class LuaMaker {
   private moduleQueue: string[] = [];
   private hasContinue = false;
   private inSwitchCase = false;
+  private inStatic = false;
   
   private filePath: string;
   private isDevMode = false;
@@ -915,6 +916,7 @@ export class LuaMaker {
   }
   
   private codeFromFunctionExpressionInternal(funcName: string, isStatic: boolean, ast: FunctionExpression): string {
+    this.inStatic = isStatic;
     let str = '';
     if(!funcName && ast.id) {
       funcName = this.codeFromAST(ast.id);
@@ -980,6 +982,7 @@ export class LuaMaker {
     this.assert(!ast.async, ast, 'Not support async yet!');
     this.assert(!ast.expression, ast, 'Not support expression yet!');
     this.assert(!ast.declare, ast, 'Not support declare yet!');
+    this.inStatic = false;
     return str;
   }
   
@@ -1052,7 +1055,7 @@ export class LuaMaker {
         this.unknowRegexs.push(ast.regex.pattern);
       }
       if(this.translateRegex) {
-        return '\'' + ast.regex.pattern.replace('\\', '%') + '\'';
+        return '\'' + ast.regex.pattern.replace(/\\(?!\\)/g, '%') + '\'';
       }
       return ast.raw + this.wrapTip('tslua无法自动转换正则表达式，请手动处理。');
     }
@@ -1117,7 +1120,7 @@ export class LuaMaker {
         // TODO: do something with static members
         let pstr = this.codeFromAST(ast.property);
         let parent = (ast as any).__parent;
-        if(parent && parent.type == AST_NODE_TYPES.CallExpression) {
+        if(parent && parent.type == AST_NODE_TYPES.CallExpression && (!this.inStatic || ast.object.type != AST_NODE_TYPES.ThisExpression)) {
           str += ':';
         } else {
           str += '.';
@@ -1287,6 +1290,9 @@ export class LuaMaker {
   }
   
   private codeFromThisExpression(ast: ThisExpression): string {
+    if(this.inStatic) {
+      return this.classQueue[this.classQueue.length - 1];
+    }
     return 'self';
   }
   

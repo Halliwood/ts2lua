@@ -22,6 +22,7 @@ var LuaMaker = /** @class */ (function () {
         this.moduleQueue = [];
         this.hasContinue = false;
         this.inSwitchCase = false;
+        this.inStatic = false;
         this.isDevMode = false;
         this.luaStyle = 'xlua';
         this.addTip = true;
@@ -781,6 +782,7 @@ var LuaMaker = /** @class */ (function () {
         return this.codeFromFunctionExpressionInternal(null, false, ast);
     };
     LuaMaker.prototype.codeFromFunctionExpressionInternal = function (funcName, isStatic, ast) {
+        this.inStatic = isStatic;
         var str = '';
         if (!funcName && ast.id) {
             funcName = this.codeFromAST(ast.id);
@@ -849,6 +851,7 @@ var LuaMaker = /** @class */ (function () {
         this.assert(!ast.async, ast, 'Not support async yet!');
         this.assert(!ast.expression, ast, 'Not support expression yet!');
         this.assert(!ast.declare, ast, 'Not support declare yet!');
+        this.inStatic = false;
         return str;
     };
     LuaMaker.prototype.codeFromIdentifier = function (ast) {
@@ -914,7 +917,7 @@ var LuaMaker = /** @class */ (function () {
                 this.unknowRegexs.push(ast.regex.pattern);
             }
             if (this.translateRegex) {
-                return '\'' + ast.regex.pattern.replace('\\', '%') + '\'';
+                return '\'' + ast.regex.pattern.replace(/\\(?!\\)/g, '%') + '\'';
             }
             return ast.raw + this.wrapTip('tslua无法自动转换正则表达式，请手动处理。');
         }
@@ -982,7 +985,7 @@ var LuaMaker = /** @class */ (function () {
                 // TODO: do something with static members
                 var pstr = this.codeFromAST(ast.property);
                 var parent_1 = ast.__parent;
-                if (parent_1 && parent_1.type == typescript_estree_1.AST_NODE_TYPES.CallExpression) {
+                if (parent_1 && parent_1.type == typescript_estree_1.AST_NODE_TYPES.CallExpression && (!this.inStatic || ast.object.type != typescript_estree_1.AST_NODE_TYPES.ThisExpression)) {
                     str += ':';
                 }
                 else {
@@ -1137,6 +1140,9 @@ var LuaMaker = /** @class */ (function () {
         return '';
     };
     LuaMaker.prototype.codeFromThisExpression = function (ast) {
+        if (this.inStatic) {
+            return this.classQueue[this.classQueue.length - 1];
+        }
         return 'self';
     };
     LuaMaker.prototype.codeFromThrowStatement = function (ast) {
