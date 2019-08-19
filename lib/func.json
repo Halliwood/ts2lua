@@ -1,0 +1,5 @@
+{
+  "push": "table.concat",
+  "GetType": "typeof",
+  "replace": "gsub"
+}

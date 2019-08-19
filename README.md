@@ -55,20 +55,42 @@ ts2lua.translateFiles(inputPath, outputPath, { ext: '.lua.txt' });
 export declare function translateFiles(inputPath : string, outputPath : string, option ?: TranslateOption): void;
 ```
 
-其中，必选参数`inputPath`和`outputPath`分别表示TypeScript文件目录和生成的lua文件目录。必选参数`option`表示转换选项，当前支持如下选项：
+其中，必选参数`inputPath`和`outputPath`分别表示TypeScript文件目录和生成的lua文件目录。可选参数`option`表示转换选项，当前支持如下选项：
 
 ```TypeScript
 export interface TranslateOption {
+  /**生成lua代码文件后缀名，默认为'.lua' */
   ext?: string, 
-  style?: 'xlua' | null
+  /**lua代码风格，默认适配xlua */
+  style?: 'xlua' | null, 
+  /**是否在生成的lua代码中，增加ts2lua认为有必要人工处理的提示，默认为true */
+  addTip?: boolean,
+  /**是否将所有require语句写入到require.<$ext>中，默认false */
+  requireAllInOne?: boolean, 
+  /**函数名替换配置json文件路径，默认为lib\\func.json */
+  funcReplConfJson?: string, 
+  /**正则表达式替换配置txt文件路径，默认为lib\\regex.txt */
+  regexReplConfTxt?: string, 
+  /**对于没有替换配置的正则表达式，是否尝试简单翻译成lua，默认false。如果为true，则将正则表达式翻译为字符串，将转义符翻译成%。 */
+  translateRegex?: boolean,
+  /**输出未识别的正则表达式的文件路径，默认不输出 */
+  traceUnknowRegex?: string
 }
 ```
 
-可选字段`ext`表示生成lua文件后缀，比如可以指定为`.lua.txt`。可选字段`style`表示生成lua代码的风格，默认是xlua风格，ts2lua会按照xlua的一些规范生成对应的lua代码，详细见下方说明。如果不使用xlua风格，请设置`style`为`null`，如下所示：
+*可选字段`ext`表示生成lua文件后缀，比如可以指定为`.lua.txt`。
+*可选字段`style`表示生成lua代码的风格，默认是xlua风格，ts2lua会按照xlua的一些规范生成对应的lua代码，详细见下方说明。如果不使用xlua风格，请设置`style`为`null`，如下所示：
 
 ```JavaScript
 ts2lua.translateFiles('in', 'out', { style: null });
 ```
+
+*可选字段`addTip`默认为true，当ts2lua遇到无法确定转换结果100%效果一致时，将在代码中插入必要的提示。比如数组下标访问、正则表达式处理等。
+*可选字段`requireAllInOne`若为`true`，则将所有require语句写入require.lua中，默认为`false`。
+*可选字段`funcReplConfJson`表示用于配置函数名转换规则的json文件的存放路径。ts2lua将根据该文件的映射关系对指定的函数名进行翻译，你可以直接修改默认配置`lib\\func.json`。比如，`replace`函数将默认翻译为`gsub`。
+*可选字段`regexReplConfTxt`表示用于配置正则表达式转换规则的txt文件的存放路径。ts2lua将根据该文件的映射关系对指定的正则表达式进行翻译，你可以直接修改默认配置`lib\\regex.txt`。
+*可选字段`translateRegex`若为`true`，则对于正则表达式转换规则json文件中没有配置的正则表达式，ts2lua将简单的进行处理：将正则表达式翻译为字符串，将转义符翻译成%。比如`/\w+/g`将翻译成`'%w+'`。该字段默认为`false`，即原样输出（对lua来说，通常会有语法错误）。
+*可选字段`traceUnknowRegex`表示未识别正则表达式的输出路径。若指定了该值，则对于正则表达式转换规则json文件中没有配置的正则表达式，ts2lua将记录到一个文件中，方便集中处理后加入到转换配置中。
 
 ## 关于变量名、函数名不符合lua规范的处理
 如果变量名、函数名为lua关键字，则自动添加`tsvar_`的前缀。如果包含`$`等lua不支持的字符，则自动将`$`替换为`tsvar_`。

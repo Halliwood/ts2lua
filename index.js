@@ -11,7 +11,7 @@ var fs = __importStar(require("fs"));
 var path = require("path");
 var util = require("util");
 var parser = require("@typescript-eslint/typescript-estree");
-var lm = __importStar(require("./gen/LuaMaker"));
+var LuaMaker_1 = require("./gen/LuaMaker");
 var luaFilesToCopy = ['class', 'trycatch'];
 var luaTemlates = {
     'class': "Class = {};\nClass.__index = Class\n\nClass.name = \"Object\";\n\nlocal Class_Constructor = {};\nClass_Constructor.__call = function (type, ...)\n    local instance = {};\n    instance.class = type;\n    setmetatable(instance, type.prototype);\n    instance:ctor(...)\n    return instance;\nend\nsetmetatable(Class, Class_Constructor);\nClass.__call = Class_Constructor.__call;\n\nfunction Class:subclass(typeName)\t\n  -- \u4EE5\u4F20\u5165\u7C7B\u578B\u540D\u79F0\u4F5C\u4E3A\u5168\u5C40\u53D8\u91CF\u540D\u79F0\u521B\u5EFAtable\n  _G[typeName] = {};\n\n  -- \u8BBE\u7F6E\u5143\u65B9\u6CD5__index,\u5E76\u7ED1\u5B9A\u7236\u7EA7\u7C7B\u578B\u4F5C\u4E3A\u5143\u8868\n  local subtype = _G[typeName];\n\n  subtype.name = typeName;\n  subtype.super = self;\n  subtype.__call = Class_Constructor.__call;\n  subtype.__index = subtype;\n  setmetatable(subtype, self);\n\n  -- \u521B\u5EFAprototype\u5E76\u7ED1\u5B9A\u7236\u7C7Bprototype\u4F5C\u4E3A\u5143\u8868\n  subtype.prototype = {};\n  subtype.prototype.__index = subtype.prototype;\n  subtype.prototype.__gc = self.prototype.__gc;\n  subtype.prototype.ctor = self.prototype.ctor;\n  subtype.prototype.__tostring = self.prototype.__tostring;\n  subtype.prototype.instanceof = self.prototype.instanceof;\n  setmetatable(subtype.prototype, self.prototype);\n\n  return subtype;\nend\n\nClass.prototype = {};\nClass.prototype.__index = Class.prototype;\nClass.prototype.__gc = function (instance)\n  print(instance, \"destroy\");\nend\nClass.prototype.ctor = function(instance)\nend\n\nClass.prototype.__tostring = function (instance)\t\n  return \"[\" .. instance.class.name ..\" object]\";\nend\n\nClass.prototype.instanceof = function(instance, typeClass)\n  if typeClass == nil then\n    return false\n  end\n\n  if instance.class == typeClass then\n    return true\n  end\n\n  local theSuper = instance.class.super\n  while(theSuper ~= nil) do\n    if theSuper == typeClass then\n      return true\n    end\n    theSuper = theSuper.super\n  end\n  return false\nend",
@@ -23,8 +23,14 @@ var devMode = false;
 var fileCnt = 0;
 var luaExt = '.lua';
 var luaStyle = 'xlua';
+var addTip = true;
 var requireAllInOne = false;
 var requireContent = '';
+var funcReplConf = {};
+var regexReplConf = {};
+var translateRegex;
+var traceUnknowRegex;
+var lm = new LuaMaker_1.LuaMaker();
 /**
  * Translate the input code string.
  * @param tsCode input code string.
@@ -32,7 +38,8 @@ var requireContent = '';
 function translate(tsCode, option) {
     processOption(option);
     var parsed = parser.parse(tsCode);
-    return lm.toLua(parsed, 'Source', '', devMode, luaStyle, requireAllInOne);
+    collectUnknowRegex();
+    return lm.toLua(parsed, 'Source', '');
 }
 exports.translate = translate;
 /**
@@ -62,6 +69,7 @@ function translateFiles(inputPath, outputPath, option) {
         fs.writeFileSync(path.join(outputPath, 'require') + luaExt, requireContent);
     }
     console.log("\x1B[36m%d\x1B[0m .lua files generated.", fileCnt);
+    collectUnknowRegex();
 }
 exports.translateFiles = translateFiles;
 function readDir(dirPath) {
@@ -92,7 +100,7 @@ function doTranslateFile(filePath) {
         var str = util.inspect(parsed, true, 100);
         fs.writeFileSync(outFilePath.replace(/\.ts$/, '.txt'), str);
     }
-    var luaContent = lm.toLua(parsed, filePath, inputFolder, devMode, luaStyle, requireAllInOne);
+    var luaContent = lm.toLua(parsed, filePath, inputFolder);
     var luaFilePath = outFilePath.replace(/\.ts$/, luaExt);
     fs.writeFileSync(luaFilePath, luaContent);
     if (requireAllInOne) {
@@ -109,8 +117,51 @@ function processOption(option) {
         if (undefined !== option.style) {
             luaStyle = option.style;
         }
+        if (undefined !== option.addTip) {
+            addTip = option.addTip;
+        }
         if (undefined !== option.requireAllInOne) {
             requireAllInOne = option.requireAllInOne;
         }
+        var funcReplConfJson = 'node_modules\\ts2lua\\lib\\func.json';
+        if (undefined !== option.funcReplConfJson) {
+            funcReplConfJson = option.funcReplConfJson;
+        }
+        var frj = fs.readFileSync(funcReplConfJson, 'utf-8');
+        funcReplConf = JSON.parse(frj);
+        var regexReplConfTxt = 'node_modules\\ts2lua\\lib\\regex.txt';
+        if (undefined !== option.regexReplConfTxt) {
+            regexReplConfTxt = option.regexReplConfTxt;
+        }
+        var rrt = fs.readFileSync(regexReplConfTxt, 'utf-8');
+        var rrLines = rrt.split(/[\r\n]+/);
+        for (var _i = 0, rrLines_1 = rrLines; _i < rrLines_1.length; _i++) {
+            var rrline = rrLines_1[_i];
+            if (rrline) {
+                var rrPair = rrline.split(/,\s*/);
+                if (rrPair.length > 1) {
+                    regexReplConf[rrPair[0]] = rrPair[1];
+                }
+            }
+        }
+        if (undefined !== option.translateRegex) {
+            translateRegex = option.translateRegex;
+        }
+        if (option.traceUnknowRegex) {
+            traceUnknowRegex = option.traceUnknowRegex;
+        }
+    }
+    lm.setEnv(devMode, luaStyle, addTip, requireAllInOne, funcReplConf, regexReplConf, translateRegex);
+}
+function collectUnknowRegex() {
+    if (traceUnknowRegex && lm.unknowRegexs.length > 0) {
+        lm.unknowRegexs.sort();
+        var unknowRegexContent = '';
+        for (var _i = 0, _a = lm.unknowRegexs; _i < _a.length; _i++) {
+            var ur = _a[_i];
+            unknowRegexContent += ur + ',\n';
+        }
+        fs.writeFileSync(traceUnknowRegex, unknowRegexContent, 'utf-8');
+        console.log("\x1B[36m%d\x1B[0m unknown regular expression.", lm.unknowRegexs.length);
     }
 }
