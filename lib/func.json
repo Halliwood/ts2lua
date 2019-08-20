@@ -1,6 +1,7 @@
 {
-  "push": "table.concat",
+  "push": "table.insert",
   "GetType": "typeof",
   "replace": "gsub",
-  "charAt": "sub"
+  "charAt": "sub",
+  "indexOf": "find"
 }

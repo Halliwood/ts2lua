@@ -184,6 +184,10 @@ export class LuaMaker {
     let content = this.codeFromAST(ast);
     content = content.replace(/console[\.|:]log/g, 'print');
     content = this.formatTip(content);
+    content = this.formatPop(content);
+    if('xlua' == this.luaStyle) {
+      content = content.replace(/UnityEngine\./g, 'CS.UnityEngine.');
+    }
   
     if(!this.requireAllInOne) {
       if(this.allClasses.length > 0) {
@@ -619,6 +623,7 @@ export class LuaMaker {
     let optStr = ast.operator;
     this.assert('>>>=' != optStr, ast, 'Not support >>>= yet!');
     (ast.left as any).__parent = ast;
+    (ast.right as any).__parent = ast;
     let left = this.codeFromAST(ast.left);
     let right = this.codeFromAST(ast.right);
   
@@ -637,7 +642,7 @@ export class LuaMaker {
       if(((ast.left as any).__isString || (ast.right as any).__isString)) {
         // TODO: Take care of string combination
         optStr = '..';
-        (ast.left as any).__isString = true;
+        (ast as any).__isString = true;
       }
     } else if(optStr == '!=') {
       optStr = '~=';
@@ -714,9 +719,9 @@ export class LuaMaker {
       funcName = funcNameRegexResult[1];
     }
     let funcRepl = this.funcReplConf[funcName];
-    if(funcRepl == 'table.concat') {
-      // Array push change into table.concat
-      str += 'table.concat(' + calleeStr.substr(0, calleeStr.length - 5) + ', ' + allAgmStr + ')';
+    if(funcRepl == 'table.insert') {
+      // Array push change into table.insert
+      str += 'table.insert(' + calleeStr.substr(0, calleeStr.length - 5) + ', ' + allAgmStr + ')';
     } else if('xlua' == this.luaStyle && !allAgmStr && funcRepl == 'typeof') {
       str = 'typeof(' + calleeStr.substr(0, calleeStr.length - 8) + ')';
     } else {
@@ -1007,17 +1012,19 @@ export class LuaMaker {
     let testStr = this.codeFromAST(ast.test);
     let str = 'if ' + testStr + ' then\n';
     str += this.indent(this.codeFromAST(ast.consequent));
-    if (ast.alternate) {
+    if (ast.alternate && (ast.alternate.type != AST_NODE_TYPES.BlockStatement || (ast.alternate as BlockStatement).body.length > 0)) {
       str += '\nelse';
       let altStr = this.codeFromAST(ast.alternate);
       if(ast.alternate.type != AST_NODE_TYPES.IfStatement) {
         str += '\n';
         str += this.indent(altStr);
+        str += '\nend';
       } else {
-        str += ' ' + altStr;
+        str += altStr;
       }
+    } else {
+      str += '\nend';
     }
-    str += '\nend';
     return str;
   }
   
@@ -1098,10 +1105,8 @@ export class LuaMaker {
   }
   
   private codeFromMemberExpression(ast: MemberExpression): string {
-    let str = this.codeFromAST(ast.object);
-    if('xlua' == this.luaStyle && str == 'UnityEngine') {
-      str = 'CS.UnityEngine';
-    }
+    let objStr = this.codeFromAST(ast.object);
+    let str = objStr;
     if (this.noBraceTypes.indexOf(ast.object.type) < 0) {
       str = '(' + str + ')';
     }
@@ -1128,7 +1133,7 @@ export class LuaMaker {
         let parent = (ast as any).__parent;
         if(parent && parent.type == AST_NODE_TYPES.CallExpression && 
           (!this.inStatic || ast.object.type != AST_NODE_TYPES.ThisExpression) && 
-          (!this.classMap[str] || !this.classMap[str].funcs[pstr] || !this.classMap[str].funcs[pstr].isStatic)) {
+          (!this.classMap[objStr] || !this.classMap[objStr].funcs[pstr] || !this.classMap[objStr].funcs[pstr].isStatic)) {
           str += ':';
         } else {
           str += '.';
@@ -1159,6 +1164,9 @@ export class LuaMaker {
     let callee = this.codeFromAST(ast.callee);
     if (this.calPriority(ast.callee) > this.calPriority(ast)) {
       callee = '(' + callee + ')';
+    }
+    if('Array' == callee && ast.arguments.length == 0) {
+      return '{}';
     }
     let str = callee + '(';
     for (let i = 0, len = ast.arguments.length; i < len; i++) {
@@ -1366,6 +1374,13 @@ export class LuaMaker {
     //   str = str + ast.operator;
     // }
     let str = astr + '=' + astr + ast.operator.substring(0, 1) + '1';
+    let parent = (ast as any).__parent;
+    if(parent && parent.type == AST_NODE_TYPES.BinaryExpression && ast.prefix) {
+      if(ast.prefix) {
+        str = this.wrapPop(str, true);
+        str += astr;
+      }
+    }
     return str;
   }
   
@@ -1585,8 +1600,12 @@ export class LuaMaker {
     return this.addTip ? '<TT>[ts2lua]' + rawTip.replace(/<TT>.*?<\/TT>/g, '') + '</TT>' : '';
   }
   
-  private wrapPop(popStr: string): string {
-    return '<ts2lua' + popStr.length + '>' + popStr;
+  private wrapPop(popStr: string, upOrDown: boolean): string {
+    if(popStr) {
+      return '<~ts2lua' + popStr.length + 'u>' + popStr;
+    } else {
+      return '<~ts2lua' + popStr.length + 'd>' + popStr;
+    }    
   }
   
   private formatTip(content: string): string {
@@ -1608,6 +1627,32 @@ export class LuaMaker {
         content = preContent.substr(0, lastNewLineIdx) + '\n' + luaComment + '\n' + tmpStr + postContent;
       } else {
         content = luaComment + '\n' + preContent + postContent;
+      }
+      rema = content.match(re);
+    }
+    return content;
+  }
+
+  private formatPop(content: string): string {
+    let re = /<~ts2lua(\d+)u>/;
+    let rema = content.match(re);
+    while(rema) {
+      let rawComment = rema[0];
+      let codeLen = Number(rema[1]);
+      let rawCommentLen = rawComment.length;
+      let preContent = content.substr(0, rema.index);
+      let postContent = content.substr(rema.index + rawCommentLen + codeLen);
+      let code2Pop = content.substr(rema.index + rawCommentLen, codeLen);
+      let lastNewLineIdx = preContent.lastIndexOf('\n');
+      if(lastNewLineIdx) {
+        let tmpStr = preContent.substr(lastNewLineIdx + 1);
+        let blanksRema = tmpStr.match(/^ */);
+        if(blanksRema) {
+          code2Pop = blanksRema[0] + code2Pop;
+        }
+        content = preContent.substr(0, lastNewLineIdx) + '\n' + code2Pop + '\n' + tmpStr + postContent;
+      } else {
+        content = code2Pop + '\n' + preContent + postContent;
       }
       rema = content.match(re);
     }

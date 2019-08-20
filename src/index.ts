@@ -107,10 +107,6 @@ function try_catch(block)
 end`
 }
 
-let inputFolder: string;
-let outputFolder: string;
-// translateFiles('G:\\ly\\trunk\\TsScripts', 'test\\out');
-
 export interface TranslateOption {
   /**生成lua代码文件后缀名，默认为'.lua' */
   ext?: string, 
@@ -144,6 +140,17 @@ let traceUnknowRegex: string;
 
 let tc = new TsCollector();
 let lm = new LuaMaker();
+
+let inputFolder: string;
+let outputFolder: string;
+// translateFiles('G:\\ly\\trunk\\TsScripts', 'test\\out', 
+//   {
+//     ext: '.lua.txt', 
+//     translateRegex: true, 
+//     traceUnknowRegex: 'unknowregex.txt',
+//     funcReplConfJson: 'lib\\func.json',
+//     regexReplConfTxt: 'lib\\regex.txt'
+//   });
 
 /**
  * Translate the input code string.

@@ -159,6 +159,10 @@ var LuaMaker = /** @class */ (function () {
         var content = this.codeFromAST(ast);
         content = content.replace(/console[\.|:]log/g, 'print');
         content = this.formatTip(content);
+        content = this.formatPop(content);
+        if ('xlua' == this.luaStyle) {
+            content = content.replace(/UnityEngine\./g, 'CS.UnityEngine.');
+        }
         if (!this.requireAllInOne) {
             if (this.allClasses.length > 0) {
                 this.importContents.push('class');
@@ -505,6 +509,7 @@ var LuaMaker = /** @class */ (function () {
         var optStr = ast.operator;
         this.assert('>>>=' != optStr, ast, 'Not support >>>= yet!');
         ast.left.__parent = ast;
+        ast.right.__parent = ast;
         var left = this.codeFromAST(ast.left);
         var right = this.codeFromAST(ast.right);
         if (optStr == 'in') {
@@ -521,7 +526,7 @@ var LuaMaker = /** @class */ (function () {
             if ((ast.left.__isString || ast.right.__isString)) {
                 // TODO: Take care of string combination
                 optStr = '..';
-                ast.left.__isString = true;
+                ast.__isString = true;
             }
         }
         else if (optStr == '!=') {
@@ -595,9 +600,9 @@ var LuaMaker = /** @class */ (function () {
             funcName = funcNameRegexResult[1];
         }
         var funcRepl = this.funcReplConf[funcName];
-        if (funcRepl == 'table.concat') {
-            // Array push change into table.concat
-            str += 'table.concat(' + calleeStr.substr(0, calleeStr.length - 5) + ', ' + allAgmStr + ')';
+        if (funcRepl == 'table.insert') {
+            // Array push change into table.insert
+            str += 'table.insert(' + calleeStr.substr(0, calleeStr.length - 5) + ', ' + allAgmStr + ')';
         }
         else if ('xlua' == this.luaStyle && !allAgmStr && funcRepl == 'typeof') {
             str = 'typeof(' + calleeStr.substr(0, calleeStr.length - 8) + ')';
@@ -872,18 +877,21 @@ var LuaMaker = /** @class */ (function () {
         var testStr = this.codeFromAST(ast.test);
         var str = 'if ' + testStr + ' then\n';
         str += this.indent(this.codeFromAST(ast.consequent));
-        if (ast.alternate) {
+        if (ast.alternate && (ast.alternate.type != typescript_estree_1.AST_NODE_TYPES.BlockStatement || ast.alternate.body.length > 0)) {
             str += '\nelse';
             var altStr = this.codeFromAST(ast.alternate);
             if (ast.alternate.type != typescript_estree_1.AST_NODE_TYPES.IfStatement) {
                 str += '\n';
                 str += this.indent(altStr);
+                str += '\nend';
             }
             else {
-                str += ' ' + altStr;
+                str += altStr;
             }
         }
-        str += '\nend';
+        else {
+            str += '\nend';
+        }
         return str;
     };
     LuaMaker.prototype.codeFromImport = function (ast) {
@@ -956,10 +964,8 @@ var LuaMaker = /** @class */ (function () {
         return str;
     };
     LuaMaker.prototype.codeFromMemberExpression = function (ast) {
-        var str = this.codeFromAST(ast.object);
-        if ('xlua' == this.luaStyle && str == 'UnityEngine') {
-            str = 'CS.UnityEngine';
-        }
+        var objStr = this.codeFromAST(ast.object);
+        var str = objStr;
         if (this.noBraceTypes.indexOf(ast.object.type) < 0) {
             str = '(' + str + ')';
         }
@@ -990,7 +996,7 @@ var LuaMaker = /** @class */ (function () {
                 var parent_1 = ast.__parent;
                 if (parent_1 && parent_1.type == typescript_estree_1.AST_NODE_TYPES.CallExpression &&
                     (!this.inStatic || ast.object.type != typescript_estree_1.AST_NODE_TYPES.ThisExpression) &&
-                    (!this.classMap[str] || !this.classMap[str].funcs[pstr] || !this.classMap[str].funcs[pstr].isStatic)) {
+                    (!this.classMap[objStr] || !this.classMap[objStr].funcs[pstr] || !this.classMap[objStr].funcs[pstr].isStatic)) {
                     str += ':';
                 }
                 else {
@@ -1019,6 +1025,9 @@ var LuaMaker = /** @class */ (function () {
         var callee = this.codeFromAST(ast.callee);
         if (this.calPriority(ast.callee) > this.calPriority(ast)) {
             callee = '(' + callee + ')';
+        }
+        if ('Array' == callee && ast.arguments.length == 0) {
+            return '{}';
         }
         var str = callee + '(';
         for (var i = 0, len = ast.arguments.length; i < len; i++) {
@@ -1214,6 +1223,13 @@ var LuaMaker = /** @class */ (function () {
         //   str = str + ast.operator;
         // }
         var str = astr + '=' + astr + ast.operator.substring(0, 1) + '1';
+        var parent = ast.__parent;
+        if (parent && parent.type == typescript_estree_1.AST_NODE_TYPES.BinaryExpression && ast.prefix) {
+            if (ast.prefix) {
+                str = this.wrapPop(str, true);
+                str += astr;
+            }
+        }
         return str;
     };
     LuaMaker.prototype.codeFromVariableDeclaration = function (ast) {
@@ -1421,8 +1437,13 @@ var LuaMaker = /** @class */ (function () {
     LuaMaker.prototype.wrapTip = function (rawTip) {
         return this.addTip ? '<TT>[ts2lua]' + rawTip.replace(/<TT>.*?<\/TT>/g, '') + '</TT>' : '';
     };
-    LuaMaker.prototype.wrapPop = function (popStr) {
-        return '<ts2lua' + popStr.length + '>' + popStr;
+    LuaMaker.prototype.wrapPop = function (popStr, upOrDown) {
+        if (popStr) {
+            return '<~ts2lua' + popStr.length + 'u>' + popStr;
+        }
+        else {
+            return '<~ts2lua' + popStr.length + 'd>' + popStr;
+        }
     };
     LuaMaker.prototype.formatTip = function (content) {
         var re = /<TT>.*?<\/TT>/;
@@ -1444,6 +1465,32 @@ var LuaMaker = /** @class */ (function () {
             }
             else {
                 content = luaComment + '\n' + preContent + postContent;
+            }
+            rema = content.match(re);
+        }
+        return content;
+    };
+    LuaMaker.prototype.formatPop = function (content) {
+        var re = /<~ts2lua(\d+)u>/;
+        var rema = content.match(re);
+        while (rema) {
+            var rawComment = rema[0];
+            var codeLen = Number(rema[1]);
+            var rawCommentLen = rawComment.length;
+            var preContent = content.substr(0, rema.index);
+            var postContent = content.substr(rema.index + rawCommentLen + codeLen);
+            var code2Pop = content.substr(rema.index + rawCommentLen, codeLen);
+            var lastNewLineIdx = preContent.lastIndexOf('\n');
+            if (lastNewLineIdx) {
+                var tmpStr = preContent.substr(lastNewLineIdx + 1);
+                var blanksRema = tmpStr.match(/^ */);
+                if (blanksRema) {
+                    code2Pop = blanksRema[0] + code2Pop;
+                }
+                content = preContent.substr(0, lastNewLineIdx) + '\n' + code2Pop + '\n' + tmpStr + postContent;
+            }
+            else {
+                content = code2Pop + '\n' + preContent + postContent;
             }
             rema = content.match(re);
         }
