@@ -4,6 +4,7 @@ var ast_node_types_1 = require("@typescript-eslint/typescript-estree/dist/ts-est
 var TsCollector = /** @class */ (function () {
     function TsCollector() {
         this.classMap = {};
+        this.enumMap = {};
         this.moduleName = '';
     }
     TsCollector.prototype.collect = function (ast) {
@@ -17,6 +18,9 @@ var TsCollector = /** @class */ (function () {
         switch (ast.type) {
             case ast_node_types_1.AST_NODE_TYPES.ClassDeclaration:
                 this.processClassDeclaration(ast);
+                break;
+            case ast_node_types_1.AST_NODE_TYPES.TSEnumDeclaration:
+                this.processTSEnumDeclaration(ast);
                 break;
             case ast_node_types_1.AST_NODE_TYPES.ExportNamedDeclaration:
                 this.processExportNamedDeclaration(ast);
@@ -43,17 +47,17 @@ var TsCollector = /** @class */ (function () {
         this.moduleName = '';
     };
     TsCollector.prototype.processClassDeclaration = function (ast) {
-        var info = { name: ast.id.name, properties: {}, funcs: {} };
+        var info = { type: ast_node_types_1.AST_NODE_TYPES.ClassDeclaration, name: ast.id.name, properties: {}, funcs: {} };
         for (var _i = 0, _a = ast.body.body; _i < _a.length; _i++) {
             var cbb = _a[_i];
             if (cbb.type == ast_node_types_1.AST_NODE_TYPES.ClassProperty) {
                 var cp = cbb;
-                var cpInfo = { name: cp.key.name, isStatic: cp.static };
+                var cpInfo = { type: ast_node_types_1.AST_NODE_TYPES.ClassProperty, name: cp.key.name, isStatic: cp.static };
                 info.properties[cpInfo.name] = cpInfo;
             }
             else if (cbb.type == ast_node_types_1.AST_NODE_TYPES.MethodDefinition) {
                 var md = cbb;
-                var mdInfo = { name: md.key.name, isStatic: md.static };
+                var mdInfo = { type: ast_node_types_1.AST_NODE_TYPES.MethodDefinition, name: md.key.name, isStatic: md.static };
                 info.funcs[mdInfo.name] = mdInfo;
             }
         }
@@ -61,6 +65,15 @@ var TsCollector = /** @class */ (function () {
         if (this.moduleName) {
             this.classMap[this.moduleName + '.' + ast.id.name] = info;
         }
+    };
+    TsCollector.prototype.processTSEnumDeclaration = function (ast) {
+        var info = { type: ast_node_types_1.AST_NODE_TYPES.TSEnumDeclaration, name: ast.id.name, members: {} };
+        for (var _i = 0, _a = ast.members; _i < _a.length; _i++) {
+            var em = _a[_i];
+            var emInfo = { type: ast_node_types_1.AST_NODE_TYPES.TSEnumMember, name: this.getId(em.id) };
+            info.members[emInfo.name] = emInfo;
+        }
+        this.enumMap[info.name] = info;
     };
     TsCollector.prototype.processExportNamedDeclaration = function (ast) {
         this.processAST(ast.declaration);

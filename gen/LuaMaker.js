@@ -17,6 +17,7 @@ var LuaMaker = /** @class */ (function () {
         this.usedIdMap = {};
         this.importAsts = [];
         this.importContents = [];
+        this.enumContents = [];
         this.allClasses = [];
         this.classQueue = [];
         this.moduleQueue = [];
@@ -152,6 +153,7 @@ var LuaMaker = /** @class */ (function () {
         this.filePath = pfilePath;
         this.usedIdMap = {};
         this.importContents.length = 0;
+        this.enumContents.length = 0;
         this.importAsts.length = 0;
         this.allClasses.length = 0;
         this.classQueue.length = 0;
@@ -193,6 +195,7 @@ var LuaMaker = /** @class */ (function () {
                 outStr += 'require("' + p + '")\n';
             }
         }
+        outStr += this.enumContents.join('\n');
         outStr += content;
         return outStr;
     };
@@ -523,10 +526,10 @@ var LuaMaker = /** @class */ (function () {
             optStr = optStr.substr(0, optStr.length - 1);
         }
         if (optStr == '+') {
-            if ((ast.left.__isString || ast.right.__isString)) {
+            if (('string' == ast.left.__type || 'string' == ast.right.__type)) {
                 // TODO: Take care of string combination
                 optStr = '..';
-                ast.__isString = true;
+                ast.__type = 'string';
             }
         }
         else if (optStr == '!=') {
@@ -595,7 +598,7 @@ var LuaMaker = /** @class */ (function () {
             allAgmStr += argStr;
         }
         var funcName = '';
-        var funcNameRegexResult = calleeStr.match(/:(\w+)$/);
+        var funcNameRegexResult = calleeStr.match(/[\.:](\w+)$/);
         if (funcNameRegexResult) {
             funcName = funcNameRegexResult[1];
         }
@@ -799,25 +802,31 @@ var LuaMaker = /** @class */ (function () {
             if ('constructor' == funcName) {
                 funcName = 'ctor';
             }
-            var className = this.classQueue[this.classQueue.length - 1];
-            if (className) {
-                // 成员函数
-                if (isStatic) {
-                    str = 'function ' + className + '.' + funcName + '(';
-                }
-                else {
-                    str = 'function ' + className + '.prototype:' + funcName + '(';
-                }
+            if (ast.type == typescript_estree_1.AST_NODE_TYPES.FunctionDeclaration) {
+                // 比如匿名函数
+                str = 'function ' + funcName + '(';
             }
             else {
-                var moduleName = this.moduleQueue[this.moduleQueue.length - 1];
-                if (moduleName) {
-                    // 模块函数
-                    str = 'function ' + moduleName + ':' + funcName + '(';
+                var className = this.classQueue[this.classQueue.length - 1];
+                if (className) {
+                    // 成员函数
+                    if (isStatic) {
+                        str = 'function ' + className + '.' + funcName + '(';
+                    }
+                    else {
+                        str = 'function ' + className + '.prototype:' + funcName + '(';
+                    }
                 }
                 else {
-                    // 普通函数
-                    str = 'function ' + funcName + '(';
+                    var moduleName = this.moduleQueue[this.moduleQueue.length - 1];
+                    if (moduleName) {
+                        // 模块函数
+                        str = 'function ' + moduleName + ':' + funcName + '(';
+                    }
+                    else {
+                        // 普通函数
+                        str = 'function ' + funcName + '(';
+                    }
                 }
             }
         }
@@ -932,9 +941,7 @@ var LuaMaker = /** @class */ (function () {
             }
             return ast.raw + this.wrapTip('tslua无法自动转换正则表达式，请手动处理。');
         }
-        if (typeof (ast.value) == 'string') {
-            ast.__isString = true;
-        }
+        ast.__type = typeof (ast.value);
         if (ast.__parent && ast.__parent.type == typescript_estree_1.AST_NODE_TYPES.Property) {
             return ast.value;
         }
@@ -964,6 +971,7 @@ var LuaMaker = /** @class */ (function () {
         return str;
     };
     LuaMaker.prototype.codeFromMemberExpression = function (ast) {
+        ast.property.__parent = ast;
         var objStr = this.codeFromAST(ast.object);
         var str = objStr;
         if (this.noBraceTypes.indexOf(ast.object.type) < 0) {
@@ -1023,20 +1031,26 @@ var LuaMaker = /** @class */ (function () {
     };
     LuaMaker.prototype.codeFromNewExpression = function (ast) {
         var callee = this.codeFromAST(ast.callee);
+        if ('Date' == callee) {
+            this.importContents.push('date');
+        }
         if (this.calPriority(ast.callee) > this.calPriority(ast)) {
             callee = '(' + callee + ')';
         }
         if ('Array' == callee && ast.arguments.length == 0) {
             return '{}';
         }
-        var str = callee + '(';
+        var argStr = '';
         for (var i = 0, len = ast.arguments.length; i < len; i++) {
             if (i > 0) {
-                str += ', ';
+                argStr += ', ';
             }
-            str += this.codeFromAST(ast.arguments[i]);
+            argStr += this.codeFromAST(ast.arguments[i]);
         }
-        str += ')';
+        if ('RegExp' == callee) {
+            return argStr;
+        }
+        var str = callee + '(' + argStr + ')';
         return str;
     };
     LuaMaker.prototype.codeFromObjectExpression = function (ast) {
@@ -1224,10 +1238,20 @@ var LuaMaker = /** @class */ (function () {
         // }
         var str = astr + '=' + astr + ast.operator.substring(0, 1) + '1';
         var parent = ast.__parent;
-        if (parent && parent.type == typescript_estree_1.AST_NODE_TYPES.BinaryExpression && ast.prefix) {
-            if (ast.prefix) {
-                str = this.wrapPop(str, true);
-                str += astr;
+        if (parent) {
+            if (parent.type == typescript_estree_1.AST_NODE_TYPES.BinaryExpression || parent.type == typescript_estree_1.AST_NODE_TYPES.MemberExpression) {
+                if (ast.prefix) {
+                    str = this.wrapPop(str, true);
+                    str += astr;
+                }
+                else {
+                    var theVarName = astr.match(/[^\.]+$/);
+                    if (theVarName) {
+                        var newVarName = theVarName[0].replace(/\[/g, '_').replace(/\]/g, '_') + 'Before';
+                        str = this.wrapPop('local ' + newVarName + ' = ' + astr, true) + this.wrapPop(str, true);
+                        str += newVarName;
+                    }
+                }
             }
         }
         return str;
@@ -1333,7 +1357,8 @@ var LuaMaker = /** @class */ (function () {
         this.assert(!ast.declare, ast);
         this.assert(!ast.modifiers, ast);
         this.assert(!ast.decorators, ast);
-        return str;
+        this.enumContents.push(str);
+        return '';
     };
     LuaMaker.prototype.codeFromTSModuleBlock = function (ast) {
         var str = '';

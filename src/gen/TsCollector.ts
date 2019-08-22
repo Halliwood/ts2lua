@@ -1,23 +1,43 @@
-import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration, BindingName, TSAsExpression, TSInterfaceDeclaration, TSTypeAssertion, TSModuleDeclaration, TSModuleBlock, TSDeclareFunction, TSAbstractMethodDefinition, BaseNode } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
+import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration, BindingName, TSAsExpression, TSInterfaceDeclaration, TSTypeAssertion, TSModuleDeclaration, TSModuleBlock, TSDeclareFunction, TSAbstractMethodDefinition, BaseNode, TSEnumMember } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
 import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree/dist/ts-estree/ast-node-types';
 
-export interface TsPropInfo {
+export interface TsInfoBase {
+  type: AST_NODE_TYPES;
+}
+
+export interface TsPropInfo extends TsInfoBase {
+  type: AST_NODE_TYPES.ClassProperty;
   name: string;
   isStatic: boolean;
 }
 
-export interface TsFuncInfo {
+export interface TsFuncInfo extends TsInfoBase {
+  type: AST_NODE_TYPES.MethodDefinition;
   name: string;
   isStatic: boolean;
 } 
 
-export interface TsClassInfo {
+export interface TsClassInfo extends TsInfoBase {
+  type: AST_NODE_TYPES.ClassDeclaration;
   name: string;
   properties: { [name: string]: TsPropInfo };
   funcs: { [name: string]: TsFuncInfo };
 }
+
+export interface TsEnumMemberInfo extends TsInfoBase {
+  type: AST_NODE_TYPES.TSEnumMember;
+  name: string;
+}
+
+export interface TsEnumInfo extends TsInfoBase {
+  type: AST_NODE_TYPES.TSEnumDeclaration;
+  name: string;
+  members: { [name: string]: TsEnumMemberInfo };
+}
+
 export class TsCollector {
   public classMap: { [name: string]: TsClassInfo } = {};
+  public enumMap: { [name: string]: TsEnumInfo } = {};
   private moduleName: string = '';
 
   public collect(ast: Program): void {
@@ -32,6 +52,9 @@ export class TsCollector {
     switch(ast.type) {
       case AST_NODE_TYPES.ClassDeclaration:
         this.processClassDeclaration(ast as ClassDeclaration);
+        break;
+      case AST_NODE_TYPES.TSEnumDeclaration:
+        this.processTSEnumDeclaration(ast as TSEnumDeclaration);
         break;
       case AST_NODE_TYPES.ExportNamedDeclaration:
         this.processExportNamedDeclaration(ast as ExportNamedDeclaration);
@@ -61,15 +84,15 @@ export class TsCollector {
   }
 
   private processClassDeclaration(ast: ClassDeclaration) {
-    let info: TsClassInfo = { name: ast.id.name, properties: {}, funcs: {} };
+    let info: TsClassInfo = { type: AST_NODE_TYPES.ClassDeclaration, name: ast.id.name, properties: {}, funcs: {} };
     for(let cbb of ast.body.body) {
       if(cbb.type == AST_NODE_TYPES.ClassProperty) {
         let cp = cbb as ClassProperty;
-        let cpInfo: TsPropInfo = { name: (cp.key as Identifier).name, isStatic: cp.static };
+        let cpInfo: TsPropInfo = { type: AST_NODE_TYPES.ClassProperty, name: (cp.key as Identifier).name, isStatic: cp.static };
         info.properties[cpInfo.name] = cpInfo;
       } else if(cbb.type == AST_NODE_TYPES.MethodDefinition) {
         let md = cbb as MethodDefinition;
-        let mdInfo: TsFuncInfo = { name: (md.key as Identifier).name, isStatic: md.static };
+        let mdInfo: TsFuncInfo = { type: AST_NODE_TYPES.MethodDefinition, name: (md.key as Identifier).name, isStatic: md.static };
         info.funcs[mdInfo.name] = mdInfo;
       }
     }
@@ -77,6 +100,15 @@ export class TsCollector {
     if(this.moduleName) {
       this.classMap[this.moduleName + '.' + ast.id.name] = info;
     }
+  }
+
+  private processTSEnumDeclaration(ast: TSEnumDeclaration) {
+    let info: TsEnumInfo = { type: AST_NODE_TYPES.TSEnumDeclaration, name: ast.id.name, members: {} };
+    for(let em of ast.members) {
+      let emInfo: TsEnumMemberInfo = { type: AST_NODE_TYPES.TSEnumMember, name: this.getId(em.id) };
+      info.members[emInfo.name] = emInfo;
+    }
+    this.enumMap[info.name] = info;
   }
 
   private processExportNamedDeclaration(ast: ExportNamedDeclaration) {

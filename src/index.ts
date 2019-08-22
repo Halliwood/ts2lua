@@ -4,108 +4,9 @@ import util = require('util')
 import parser = require('@typescript-eslint/typescript-estree');
 import { LuaMaker } from './gen/LuaMaker';
 import { TsCollector } from './gen/TsCollector';
+import { Program } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
 
-const luaFilesToCopy: string[] = ['class', 'trycatch'];
-const luaTemlates: {[name: string]: string} = {
-  'class': `Class = {};
-Class.__index = Class
-
-Class.name = "Object";
-
-local Class_Constructor = {};
-Class_Constructor.__call = function (type, ...)
-    local instance = {};
-    instance.class = type;
-    setmetatable(instance, type.prototype);
-    instance:ctor(...)
-    return instance;
-end
-setmetatable(Class, Class_Constructor);
-Class.__call = Class_Constructor.__call;
-
-function Class:subclass(typeName)	
-  -- 以传入类型名称作为全局变量名称创建table
-  _G[typeName] = {};
-
-  -- 设置元方法__index,并绑定父级类型作为元表
-  local subtype = _G[typeName];
-
-  subtype.name = typeName;
-  subtype.super = self;
-  subtype.__call = Class_Constructor.__call;
-  subtype.__index = subtype;
-  setmetatable(subtype, self);
-
-  -- 创建prototype并绑定父类prototype作为元表
-  subtype.prototype = {};
-  subtype.prototype.__index = subtype.prototype;
-  subtype.prototype.__gc = self.prototype.__gc;
-  subtype.prototype.ctor = self.prototype.ctor;
-  subtype.prototype.__tostring = self.prototype.__tostring;
-  subtype.prototype.instanceof = self.prototype.instanceof;
-  setmetatable(subtype.prototype, self.prototype);
-
-  return subtype;
-end
-
-Class.prototype = {};
-Class.prototype.__index = Class.prototype;
-Class.prototype.__gc = function (instance)
-  print(instance, "destroy");
-end
-Class.prototype.ctor = function(instance)
-end
-
-Class.prototype.__tostring = function (instance)	
-  return "[" .. instance.class.name .." object]";
-end
-
-Class.prototype.instanceof = function(instance, typeClass)
-  if typeClass == nil then
-    return false
-  end
-
-  if instance.class == typeClass then
-    return true
-  end
-
-  local theSuper = instance.class.super
-  while(theSuper ~= nil) do
-    if theSuper == typeClass then
-      return true
-    end
-    theSuper = theSuper.super
-  end
-  return false
-end`,
-  'trycatch': `-- 异常捕获
-function try_catch(block)
-  local main = block.main
-  local catch = block.catch
-  local finally = block.finally
-
-  assert(main)
-
-  -- try to call it
-  local ok, errors = xpcall(main, debug.traceback)
-  if not ok then
-      -- run the catch function
-      if catch then
-          catch(errors)
-      end
-  end
-
-  -- run the finally function
-  if finally then
-      finally(ok, errors)
-  end
-
-  -- ok?
-  if ok then
-      return errors
-  end
-end`
-}
+const luaFilesToCopy: string[] = ['class', 'trycatch', 'date'];
 
 export interface TranslateOption {
   /**生成lua代码文件后缀名，默认为'.lua' */
@@ -141,17 +42,19 @@ let traceUnknowRegex: string;
 let tc = new TsCollector();
 let lm = new LuaMaker();
 
+let astMap: { [path: string]: Program } = {};
+
 let inputFolder: string;
 let outputFolder: string;
-// translateFiles('G:\\ly\\trunk\\TsScripts', 'test\\out', 
+// translateFiles('G:\\ly\\trunk\\TsScripts', 
+//   // 'G:\\ly\\trunk\\Assets\\StreamingAssets\\luaScript', 
+//   'test\\out',
 //   {
 //     ext: '.lua.txt', 
 //     translateRegex: true, 
-//     traceUnknowRegex: 'unknowregex.txt',
 //     funcReplConfJson: 'lib\\func.json',
 //     regexReplConfTxt: 'lib\\regex.txt'
 //   });
-
 /**
  * Translate the input code string.
  * @param tsCode input code string.
@@ -178,7 +81,7 @@ export function translateFiles(inputPath: string, outputPath: string, option?: T
   // copy class.lua & trycatch.lua
   fs.mkdirSync(outputPath, { recursive: true });
   for(let luaFile of luaFilesToCopy) {
-    fs.writeFileSync(path.join(outputPath, luaFile) + luaExt, luaTemlates[luaFile]);
+    fs.copyFileSync(path.join(__dirname, 'lua', luaFile) + '.lua', path.join(outputPath, luaFile) + luaExt);
   }
 
   inputFolder = inputPath;
@@ -229,13 +132,15 @@ function readDir(dirPath: string, collectOrTranslate: boolean) {
 function collectClass(filePath: string) {
   const fileContent = fs.readFileSync(filePath, 'utf-8');
   const parsed = parser.parse(fileContent);
+  astMap[filePath] = parsed;
   tc.collect(parsed);
 }
 
 function doTranslateFile(filePath: string) {
   // console.log('parsing: ', filePath);
   const fileContent = fs.readFileSync(filePath, 'utf-8');
-  const parsed = parser.parse(fileContent);
+  // const parsed = parser.parse(fileContent);
+  const parsed = astMap[filePath];
 
   let outFilePath = filePath.replace(inputFolder, outputFolder);
   let fileFolder = outFilePath.substr(0, outFilePath.lastIndexOf('\\'));
@@ -272,13 +177,13 @@ function processOption(option?: TranslateOption) {
     if(undefined !== option.requireAllInOne) {
       requireAllInOne = option.requireAllInOne;
     }
-    let funcReplConfJson = 'node_modules\\ts2lua\\lib\\func.json';
+    let funcReplConfJson = path.join(__dirname, 'lib\\func.json');
     if(undefined !== option.funcReplConfJson) {
       funcReplConfJson = option.funcReplConfJson;
     }
     let frj = fs.readFileSync(funcReplConfJson, 'utf-8');
     funcReplConf = JSON.parse(frj);
-    let regexReplConfTxt = 'node_modules\\ts2lua\\lib\\regex.txt';
+    let regexReplConfTxt = path.join(__dirname, 'lib\\regex.txt');
     if(undefined !== option.regexReplConfTxt) {
       regexReplConfTxt = option.regexReplConfTxt;
     }

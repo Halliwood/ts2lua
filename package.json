@@ -1,6 +1,6 @@
 {
   "name": "ts2lua",
-  "version": "1.0.41",
+  "version": "1.0.47",
   "description": "Change typescript to lua.",
   "main": "index.js",
   "types": "index.d.ts",
@@ -41,6 +41,9 @@
     "gen/LuaMaker.js",
     "gen/TsCollector.js",
     "lib/func.json",
-    "lib/regex.txt"
+    "lib/regex.txt",
+    "lua/class.lua",
+    "lua/date.lua",
+    "lua/trycatch.lua"
   ]
 }

@@ -139,6 +139,7 @@ export class LuaMaker {
   private usedIdMap: { [id: string]: boolean } = {}
   private importAsts: ImportDeclaration[] = [];
   private importContents: string[] = [];
+  private enumContents: string[] = [];
   private classMap: { [name: string]: TsClassInfo };
   private allClasses: string[] = [];
   private classQueue: string[] = [];
@@ -177,6 +178,7 @@ export class LuaMaker {
   
     this.usedIdMap = {};
     this.importContents.length = 0;
+    this.enumContents.length = 0;
     this.importAsts.length = 0;
     this.allClasses.length = 0;
     this.classQueue.length = 0;
@@ -216,6 +218,8 @@ export class LuaMaker {
         outStr += 'require("' + p + '")\n';
       }
     }
+
+    outStr += this.enumContents.join('\n');
     
     outStr += content;
     return outStr;
@@ -639,11 +643,11 @@ export class LuaMaker {
       optStr = optStr.substr(0, optStr.length - 1);
     } 
     if(optStr == '+') {
-      if(((ast.left as any).__isString || (ast.right as any).__isString)) {
+      if(('string' == (ast.left as any).__type || 'string' == (ast.right as any).__type)) {
         // TODO: Take care of string combination
         optStr = '..';
-        (ast as any).__isString = true;
-      }
+        (ast as any).__type = 'string';
+      } 
     } else if(optStr == '!=') {
       optStr = '~=';
     } else if(optStr == '===') {
@@ -714,7 +718,7 @@ export class LuaMaker {
       allAgmStr += argStr;
     }
     let funcName = '';
-    let funcNameRegexResult = calleeStr.match(/:(\w+)$/);
+    let funcNameRegexResult = calleeStr.match(/[\.:](\w+)$/);
     if(funcNameRegexResult) {
       funcName = funcNameRegexResult[1];
     }
@@ -936,22 +940,27 @@ export class LuaMaker {
       if('constructor' == funcName) {
         funcName = 'ctor';
       }
-      let className = this.classQueue[this.classQueue.length - 1];
-      if (className) {
-        // 成员函数
-        if(isStatic) {
-          str = 'function ' + className + '.' + funcName + '(';
-        } else {
-          str = 'function ' + className + '.prototype:' + funcName + '(';
-        }
+      if((ast as any).type == AST_NODE_TYPES.FunctionDeclaration) {
+        // 比如匿名函数
+        str = 'function ' + funcName + '(';
       } else {
-        let moduleName = this.moduleQueue[this.moduleQueue.length - 1];
-        if(moduleName) {
-          // 模块函数
-          str = 'function ' + moduleName + ':' + funcName + '(';
+        let className = this.classQueue[this.classQueue.length - 1];
+        if (className) {
+          // 成员函数
+          if(isStatic) {
+            str = 'function ' + className + '.' + funcName + '(';
+          } else {
+            str = 'function ' + className + '.prototype:' + funcName + '(';
+          }
         } else {
-          // 普通函数
-          str = 'function ' + funcName + '(';
+          let moduleName = this.moduleQueue[this.moduleQueue.length - 1];
+          if(moduleName) {
+            // 模块函数
+            str = 'function ' + moduleName + ':' + funcName + '(';
+          } else {
+            // 普通函数
+            str = 'function ' + funcName + '(';
+          }
         }
       }
     } else {
@@ -1072,9 +1081,7 @@ export class LuaMaker {
       }
       return ast.raw + this.wrapTip('tslua无法自动转换正则表达式，请手动处理。');
     }
-    if(typeof(ast.value) == 'string') {
-      (ast as any).__isString = true;
-    }
+    (ast as any).__type = typeof(ast.value);
     if((ast as any).__parent && (ast as any).__parent.type == AST_NODE_TYPES.Property) {
       return ast.value as string;
     }
@@ -1105,6 +1112,7 @@ export class LuaMaker {
   }
   
   private codeFromMemberExpression(ast: MemberExpression): string {
+    (ast.property as any).__parent = ast;
     let objStr = this.codeFromAST(ast.object);
     let str = objStr;
     if (this.noBraceTypes.indexOf(ast.object.type) < 0) {
@@ -1162,20 +1170,26 @@ export class LuaMaker {
   
   private codeFromNewExpression(ast: NewExpression): string {
     let callee = this.codeFromAST(ast.callee);
+    if('Date' == callee) {
+      this.importContents.push('date');
+    }
     if (this.calPriority(ast.callee) > this.calPriority(ast)) {
       callee = '(' + callee + ')';
     }
     if('Array' == callee && ast.arguments.length == 0) {
       return '{}';
     }
-    let str = callee + '(';
+    let argStr = '';
     for (let i = 0, len = ast.arguments.length; i < len; i++) {
       if (i > 0) {
-        str += ', ';
+        argStr += ', ';
       }
-      str += this.codeFromAST(ast.arguments[i]);
+      argStr += this.codeFromAST(ast.arguments[i]);
     }
-    str += ')';
+    if('RegExp' == callee) {
+      return argStr;
+    }
+    let str = callee + '(' + argStr + ')';
     return str;
   }
   
@@ -1375,10 +1389,19 @@ export class LuaMaker {
     // }
     let str = astr + '=' + astr + ast.operator.substring(0, 1) + '1';
     let parent = (ast as any).__parent;
-    if(parent && parent.type == AST_NODE_TYPES.BinaryExpression && ast.prefix) {
-      if(ast.prefix) {
-        str = this.wrapPop(str, true);
-        str += astr;
+    if(parent) {
+      if(parent.type == AST_NODE_TYPES.BinaryExpression || parent.type == AST_NODE_TYPES.MemberExpression) {
+        if(ast.prefix) {
+          str = this.wrapPop(str, true);
+          str += astr;
+        } else {
+          let theVarName = astr.match(/[^\.]+$/);
+          if(theVarName) {
+            let newVarName = theVarName[0].replace(/\[/g, '_').replace(/\]/g, '_') + 'Before';
+            str = this.wrapPop('local ' + newVarName + ' = ' + astr, true) + this.wrapPop(str, true);
+            str += newVarName;
+          }
+        }
       }
     }
     return str;
@@ -1490,7 +1513,8 @@ export class LuaMaker {
     this.assert(!ast.declare, ast);
     this.assert(!ast.modifiers, ast);
     this.assert(!ast.decorators, ast);
-    return str;
+    this.enumContents.push(str);
+    return '';
   }
   
   private codeFromTSModuleBlock(ast: TSModuleBlock): string {
