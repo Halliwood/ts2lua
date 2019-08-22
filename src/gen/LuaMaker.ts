@@ -3,6 +3,7 @@ import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree';
 import util = require('util');
 import path = require('path');
 import { TsClassInfo } from './TsCollector';
+import { TranslateOption } from './TranslateOption';
 
 export class LuaMaker {
   private readonly noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier, AST_NODE_TYPES.CallExpression, AST_NODE_TYPES.TSAsExpression];
@@ -150,23 +151,17 @@ export class LuaMaker {
   
   private filePath: string;
   private isDevMode = false;
-  private luaStyle = 'xlua';
-  private addTip = true;
-  private requireAllInOne = false;
+  private option: TranslateOption;
   private funcReplConf: {[func: string]: string} = {};
   private regexReplConf: {[regex: string]: string} = {};
-  private translateRegex = false;
 
   public unknowRegexs: string[] = [];
 
-  public setEnv(devMode: boolean, style: string, addTip: boolean, pRequireAllInOne: boolean, funcReplConf: {[func: string]: string}, regexReplConf: {[regex: string]: string}, translateRegex: boolean): void {
+  public setEnv(devMode: boolean, option: TranslateOption, funcReplConf: {[func: string]: string}, regexReplConf: {[regex: string]: string}): void {
     this.isDevMode = devMode;
-    this.luaStyle = style;
-    this.addTip = addTip;
-    this.requireAllInOne = pRequireAllInOne;
+    this.option = option;
     this.funcReplConf = funcReplConf;
     this.regexReplConf = regexReplConf;
-    this.translateRegex = translateRegex;
   }
 
   public setClassMap(classMap: { [name: string]: TsClassInfo }) {
@@ -187,11 +182,11 @@ export class LuaMaker {
     content = content.replace(/console[\.|:]log/g, 'print');
     content = this.formatTip(content);
     content = this.formatPop(content);
-    if('xlua' == this.luaStyle) {
+    if('xlua' == this.option.style) {
       content = content.replace(/UnityEngine\./g, 'CS.UnityEngine.');
     }
   
-    if(!this.requireAllInOne) {
+    if(!this.option.requireAllInOne) {
       if(this.allClasses.length > 0) {
         this.importContents.push('class');
       }
@@ -726,7 +721,7 @@ export class LuaMaker {
     if(funcRepl == 'table.insert') {
       // Array push change into table.insert
       str += 'table.insert(' + calleeStr.substr(0, calleeStr.length - 5) + ', ' + allAgmStr + ')';
-    } else if('xlua' == this.luaStyle && !allAgmStr && funcRepl == 'typeof') {
+    } else if('xlua' == this.option.style && !allAgmStr && funcRepl == 'typeof') {
       str = 'typeof(' + calleeStr.substr(0, calleeStr.length - 8) + ')';
     } else {
       if(typeof(funcRepl) === 'string') {
@@ -1076,7 +1071,7 @@ export class LuaMaker {
       if(this.unknowRegexs.indexOf(ast.regex.pattern) < 0) {
         this.unknowRegexs.push(ast.regex.pattern);
       }
-      if(this.translateRegex) {
+      if(this.option.translateRegex) {
         return '\'' + ast.regex.pattern.replace(/\\(?!\\)/g, '%') + '\'';
       }
       return ast.raw + this.wrapTip('tslua无法自动转换正则表达式，请手动处理。');
@@ -1621,7 +1616,7 @@ export class LuaMaker {
   }
   
   private wrapTip(rawTip: string): string {
-    return this.addTip ? '<TT>[ts2lua]' + rawTip.replace(/<TT>.*?<\/TT>/g, '') + '</TT>' : '';
+    return this.option.addTip ? '<TT>[ts2lua]' + rawTip.replace(/<TT>.*?<\/TT>/g, '') + '</TT>' : '';
   }
   
   private wrapPop(popStr: string, upOrDown: boolean): string {

@@ -16,15 +16,27 @@ var TsCollector_1 = require("./gen/TsCollector");
 var luaFilesToCopy = ['class', 'trycatch', 'date'];
 var devMode = false;
 var fileCnt = 0;
-var luaExt = '.lua';
-var luaStyle = 'xlua';
-var addTip = true;
-var requireAllInOne = false;
 var requireContent = '';
 var funcReplConf = {};
 var regexReplConf = {};
+var luaExt = '.lua';
+var luaStyle = 'xlua';
+var addTip = true;
+var breakUpFiles = true;
+var requireAllInOne = false;
 var translateRegex;
 var traceUnknowRegex;
+var opt = {
+    ext: '.lua',
+    style: 'xlua',
+    addTip: true,
+    breakUpFiles: true,
+    requireAllInOne: false,
+    funcReplConfJson: path.join(__dirname, 'lib\\func.json'),
+    regexReplConfTxt: path.join(__dirname, 'lib\\regex.txt'),
+    translateRegex: false,
+    traceUnknowRegex: undefined
+};
 var tc = new TsCollector_1.TsCollector();
 var lm = new LuaMaker_1.LuaMaker();
 var astMap = {};
@@ -138,30 +150,15 @@ function doTranslateFile(filePath) {
     fileCnt++;
 }
 function processOption(option) {
-    if (option) {
-        if (option.ext) {
-            luaExt = option.ext;
-        }
-        if (undefined !== option.style) {
-            luaStyle = option.style;
-        }
-        if (undefined !== option.addTip) {
-            addTip = option.addTip;
-        }
-        if (undefined !== option.requireAllInOne) {
-            requireAllInOne = option.requireAllInOne;
-        }
-        var funcReplConfJson = path.join(__dirname, 'lib\\func.json');
-        if (undefined !== option.funcReplConfJson) {
-            funcReplConfJson = option.funcReplConfJson;
-        }
-        var frj = fs.readFileSync(funcReplConfJson, 'utf-8');
+    for (var key in option) {
+        opt[key] = option[key];
+    }
+    if (option.funcReplConfJson) {
+        var frj = fs.readFileSync(option.funcReplConfJson, 'utf-8');
         funcReplConf = JSON.parse(frj);
-        var regexReplConfTxt = path.join(__dirname, 'lib\\regex.txt');
-        if (undefined !== option.regexReplConfTxt) {
-            regexReplConfTxt = option.regexReplConfTxt;
-        }
-        var rrt = fs.readFileSync(regexReplConfTxt, 'utf-8');
+    }
+    if (option.regexReplConfTxt) {
+        var rrt = fs.readFileSync(option.regexReplConfTxt, 'utf-8');
         var rrLines = rrt.split(/[\r\n]+/);
         for (var _i = 0, rrLines_1 = rrLines; _i < rrLines_1.length; _i++) {
             var rrline = rrLines_1[_i];
@@ -172,14 +169,8 @@ function processOption(option) {
                 }
             }
         }
-        if (undefined !== option.translateRegex) {
-            translateRegex = option.translateRegex;
-        }
-        if (option.traceUnknowRegex) {
-            traceUnknowRegex = option.traceUnknowRegex;
-        }
     }
-    lm.setEnv(devMode, luaStyle, addTip, requireAllInOne, funcReplConf, regexReplConf, translateRegex);
+    lm.setEnv(devMode, opt, funcReplConf, regexReplConf);
 }
 function collectUnknowRegex() {
     if (traceUnknowRegex && lm.unknowRegexs.length > 0) {

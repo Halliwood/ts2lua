@@ -25,12 +25,8 @@ var LuaMaker = /** @class */ (function () {
         this.inSwitchCase = false;
         this.inStatic = false;
         this.isDevMode = false;
-        this.luaStyle = 'xlua';
-        this.addTip = true;
-        this.requireAllInOne = false;
         this.funcReplConf = {};
         this.regexReplConf = {};
-        this.translateRegex = false;
         this.unknowRegexs = [];
         this.setPriority(['( … )'], this.pv++);
         this.setPriority(['… . …', '… [ … ]', 'new … ( … )', '… ( … )'], this.pv++);
@@ -137,14 +133,11 @@ var LuaMaker = /** @class */ (function () {
         }
         return ast.__calPriority;
     };
-    LuaMaker.prototype.setEnv = function (devMode, style, addTip, pRequireAllInOne, funcReplConf, regexReplConf, translateRegex) {
+    LuaMaker.prototype.setEnv = function (devMode, option, funcReplConf, regexReplConf) {
         this.isDevMode = devMode;
-        this.luaStyle = style;
-        this.addTip = addTip;
-        this.requireAllInOne = pRequireAllInOne;
+        this.option = option;
         this.funcReplConf = funcReplConf;
         this.regexReplConf = regexReplConf;
-        this.translateRegex = translateRegex;
     };
     LuaMaker.prototype.setClassMap = function (classMap) {
         this.classMap = classMap;
@@ -162,10 +155,10 @@ var LuaMaker = /** @class */ (function () {
         content = content.replace(/console[\.|:]log/g, 'print');
         content = this.formatTip(content);
         content = this.formatPop(content);
-        if ('xlua' == this.luaStyle) {
+        if ('xlua' == this.option.style) {
             content = content.replace(/UnityEngine\./g, 'CS.UnityEngine.');
         }
-        if (!this.requireAllInOne) {
+        if (!this.option.requireAllInOne) {
             if (this.allClasses.length > 0) {
                 this.importContents.push('class');
             }
@@ -607,7 +600,7 @@ var LuaMaker = /** @class */ (function () {
             // Array push change into table.insert
             str += 'table.insert(' + calleeStr.substr(0, calleeStr.length - 5) + ', ' + allAgmStr + ')';
         }
-        else if ('xlua' == this.luaStyle && !allAgmStr && funcRepl == 'typeof') {
+        else if ('xlua' == this.option.style && !allAgmStr && funcRepl == 'typeof') {
             str = 'typeof(' + calleeStr.substr(0, calleeStr.length - 8) + ')';
         }
         else {
@@ -936,7 +929,7 @@ var LuaMaker = /** @class */ (function () {
             if (this.unknowRegexs.indexOf(ast.regex.pattern) < 0) {
                 this.unknowRegexs.push(ast.regex.pattern);
             }
-            if (this.translateRegex) {
+            if (this.option.translateRegex) {
                 return '\'' + ast.regex.pattern.replace(/\\(?!\\)/g, '%') + '\'';
             }
             return ast.raw + this.wrapTip('tslua无法自动转换正则表达式，请手动处理。');
@@ -1460,7 +1453,7 @@ var LuaMaker = /** @class */ (function () {
         console.log(util.inspect(ast, true, 4));
     };
     LuaMaker.prototype.wrapTip = function (rawTip) {
-        return this.addTip ? '<TT>[ts2lua]' + rawTip.replace(/<TT>.*?<\/TT>/g, '') + '</TT>' : '';
+        return this.option.addTip ? '<TT>[ts2lua]' + rawTip.replace(/<TT>.*?<\/TT>/g, '') + '</TT>' : '';
     };
     LuaMaker.prototype.wrapPop = function (popStr, upOrDown) {
         if (popStr) {

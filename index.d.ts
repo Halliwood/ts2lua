@@ -10,6 +10,8 @@ export interface TranslateOption {
   style?: 'xlua' | null, 
   /**是否在生成的lua代码中，增加ts2lua认为有必要人工处理的提示，默认为true */
   addTip?: boolean,
+  /**多文件模式下，是否打散所有类到单独的文件，默认为true */
+  breakUpFiles?: boolean,
   /**是否将所有require语句写入到require.<$ext>中，默认false */
   requireAllInOne?: boolean, 
   /**函数名替换配置json文件路径，默认为lib\\func.json */
