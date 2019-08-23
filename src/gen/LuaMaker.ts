@@ -229,6 +229,7 @@ export class LuaMaker {
     }
 
     let imports: string[] = this.importMapByClass[className];
+    let locals: string[] = [];
     if(hasClass) {
       imports.push('class');
     }
@@ -252,6 +253,9 @@ export class LuaMaker {
           }          
           if(imports.indexOf(importPath) < 0) {
             imports.push(importPath);
+            if(s.local.name != importedName) {
+              locals.push('local ' + s.local.name + ' = ' + importedName);
+            }
           }
         }
       }
@@ -279,9 +283,12 @@ export class LuaMaker {
       } 
       outStr += 'require("' + p + '")\n';
     }
+    for(let lcl of locals) {
+      outStr += lcl + '\n';
+    }
 
     if(this.fileName == className) {
-      for(let enumName in this.nativeEnumNames) {
+      for(let enumName of this.nativeEnumNames) {
         outStr += this.classContentMap[enumName] + '\n';
       }
     }

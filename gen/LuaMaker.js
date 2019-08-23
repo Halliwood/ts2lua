@@ -190,6 +190,7 @@ var LuaMaker = /** @class */ (function () {
             content = content.replace(/UnityEngine\./g, 'CS.UnityEngine.');
         }
         var imports = this.importMapByClass[className];
+        var locals = [];
         if (hasClass) {
             imports.push('class');
         }
@@ -217,6 +218,9 @@ var LuaMaker = /** @class */ (function () {
                     }
                     if (imports.indexOf(importPath) < 0) {
                         imports.push(importPath);
+                        if (s.local.name != importedName) {
+                            locals.push('local ' + s.local.name + ' = ' + importedName);
+                        }
                     }
                 }
             }
@@ -247,8 +251,13 @@ var LuaMaker = /** @class */ (function () {
             }
             outStr += 'require("' + p + '")\n';
         }
+        for (var _j = 0, locals_1 = locals; _j < locals_1.length; _j++) {
+            var lcl = locals_1[_j];
+            outStr += lcl + '\n';
+        }
         if (this.fileName == className) {
-            for (var enumName in this.nativeEnumNames) {
+            for (var _k = 0, _l = this.nativeEnumNames; _k < _l.length; _k++) {
+                var enumName = _l[_k];
                 outStr += this.classContentMap[enumName] + '\n';
             }
         }
