@@ -249,7 +249,8 @@ export class LuaMaker {
           if(importedName != importPP.name && (this.classMap[importedName] || this.enumMap[importedName])) {
             importPath = importPP.dir + '/' + importPP.name + '/' + importedName;
           } else {
-            importPath = importPP.dir + '/' + importedName;
+            // importPath = importPP.dir + '/' + importedName;
+            importPath = importSource;
           }          
           if(imports.indexOf(importPath) < 0) {
             imports.push(importPath);
@@ -803,6 +804,8 @@ export class LuaMaker {
     } else {
       if(typeof(funcRepl) === 'string') {
         calleeStr = calleeStr.replace(/(?<=[\.:])\w+$/, funcRepl);
+      } else if(!funcRepl && (funcName == 'trim' || funcName == 'split')) {
+        this.addImport('stringutil');
       }
       str = calleeStr + '(';
       str += allAgmStr;
@@ -1727,11 +1730,17 @@ export class LuaMaker {
   }
 
   private addImport(importName: string) {
-    this.imports.push(importName);
+    if(this.imports.indexOf(importName) < 0) {
+      this.imports.push(importName);
+    }
+    let imArr: string[];
     if(this.className && this.isDiffClass) {
-      this.importMapByClass[this.className].push(importName);
+      imArr = this.importMapByClass[this.className];
     } else {
-      this.importMapByClass[this.fileName].push(importName);
+      imArr = this.importMapByClass[this.fileName];
+    }
+    if(imArr.indexOf(importName) < 0) {
+      imArr.push(importName);
     }
   }
   

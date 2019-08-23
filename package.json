@@ -1,6 +1,6 @@
 {
   "name": "ts2lua",
-  "version": "1.0.56",
+  "version": "1.0.59",
   "description": "Change typescript to lua.",
   "main": "index.js",
   "types": "index.d.ts",
@@ -44,6 +44,7 @@
     "lib/regex.txt",
     "lua/class.lua",
     "lua/date.lua",
-    "lua/trycatch.lua"
+    "lua/trycatch.lua",
+    "lua/stringutil.lua"
   ]
 }
