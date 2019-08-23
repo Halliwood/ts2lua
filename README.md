@@ -65,8 +65,6 @@ export interface TranslateOption {
   style?: 'xlua' | null, 
   /**是否在生成的lua代码中，增加ts2lua认为有必要人工处理的提示，默认为true */
   addTip?: boolean,
-  /**是否将所有require语句写入到require.<$ext>中，默认false */
-  requireAllInOne?: boolean, 
   /**函数名替换配置json文件路径，默认为lib\\func.json */
   funcReplConfJson?: string, 
   /**正则表达式替换配置txt文件路径，默认为lib\\regex.txt */
@@ -86,7 +84,6 @@ ts2lua.translateFiles('in', 'out', { style: null });
 ```
 
 * 可选字段`addTip`默认为true，当ts2lua遇到无法确定转换结果100%效果一致时，将在代码中插入必要的提示。比如数组下标访问、正则表达式处理等。
-* 可选字段`requireAllInOne`若为`true`，则将所有require语句写入require.lua中，默认为`false`。
 * 可选字段`funcReplConfJson`表示用于配置函数名转换规则的json文件的存放路径。ts2lua将根据该文件的映射关系对指定的函数名进行翻译，你可以直接修改默认配置`lib\\func.json`。比如，`replace`函数将默认翻译为`gsub`。
 * 可选字段`regexReplConfTxt`表示用于配置正则表达式转换规则的txt文件的存放路径。ts2lua将根据该文件的映射关系对指定的正则表达式进行翻译，你可以直接修改默认配置`lib\\regex.txt`。
 * 可选字段`translateRegex`若为`true`，则对于正则表达式转换规则json文件中没有配置的正则表达式，ts2lua将简单的进行处理：将正则表达式翻译为字符串，将转义符翻译成%。比如`/\w+/g`将翻译成`'%w+'`。该字段默认为`false`，即原样输出（对lua来说，通常会有语法错误）。
@@ -94,6 +91,9 @@ ts2lua.translateFiles('in', 'out', { style: null });
 
 ## 关于变量名、函数名不符合lua规范的处理
 如果变量名、函数名为lua关键字，则自动添加`tsvar_`的前缀。如果包含`$`等lua不支持的字符，则自动将`$`替换为`tsvar_`。
+
+## 关于单个ts文件中存在多个类定义的处理
+TypeScript允许在单个ts文件中定义多个类，lua其实也可以这么写。但是为了避免循环引用的问题，最好的做法是将每个“类”定义在单独的文件里。ts2lua采用了这一策略。比如，在`module/something/Thing.ts`中定义了类`ThingB`，ts2lua会将`ThingB`生成到`module/something/Thing/ThingB.lua`中。
 
 ## 关于数组下标访问的处理
 由于lua的下标从1开始，所以对于类似`arr[i]`这种会转化为`arr[i+1]`，而对于`arr[idx]`这种则不会进行+1处理，ts2lua会自动添加注释提醒您人工确认转换结果是否正确。

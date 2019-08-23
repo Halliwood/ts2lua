@@ -52,12 +52,12 @@ var TsCollector = /** @class */ (function () {
             var cbb = _a[_i];
             if (cbb.type == ast_node_types_1.AST_NODE_TYPES.ClassProperty) {
                 var cp = cbb;
-                var cpInfo = { type: ast_node_types_1.AST_NODE_TYPES.ClassProperty, name: cp.key.name, isStatic: cp.static };
+                var cpInfo = { type: ast_node_types_1.AST_NODE_TYPES.ClassProperty, name: cp.key.name, isStatic: cp.static, varType: cp.typeAnnotation };
                 info.properties[cpInfo.name] = cpInfo;
             }
             else if (cbb.type == ast_node_types_1.AST_NODE_TYPES.MethodDefinition) {
                 var md = cbb;
-                var mdInfo = { type: ast_node_types_1.AST_NODE_TYPES.MethodDefinition, name: md.key.name, isStatic: md.static };
+                var mdInfo = { type: ast_node_types_1.AST_NODE_TYPES.MethodDefinition, name: md.key.name, isStatic: md.static, returnType: md.value.returnType };
                 info.funcs[mdInfo.name] = mdInfo;
             }
         }

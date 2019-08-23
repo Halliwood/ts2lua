@@ -1,4 +1,4 @@
-import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration, BindingName, TSAsExpression, TSInterfaceDeclaration, TSTypeAssertion, TSModuleDeclaration, TSModuleBlock, TSDeclareFunction, TSAbstractMethodDefinition, BaseNode, TSEnumMember } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
+import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpression, AssignmentPattern, AwaitExpression, BigIntLiteral, BinaryExpression, BlockStatement, BreakStatement, CallExpression, CatchClause, ClassBody, ClassDeclaration, ClassExpression, ClassProperty, ConditionalExpression, ContinueStatement, DebuggerStatement, Decorator, DoWhileStatement, EmptyStatement, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, ExpressionStatement, ForInStatement, ForOfStatement, ForStatement, FunctionDeclaration, FunctionExpression, Identifier, IfStatement, Import, ImportDeclaration, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, LabeledStatement, Literal, LogicalExpression, MemberExpression, MetaProperty, MethodDefinition, NewExpression, ObjectExpression, ObjectPattern, Program, Property, RestElement, ReturnStatement, SequenceExpression, SpreadElement, Super, SwitchCase, SwitchStatement, TaggedTemplateExpression, TemplateElement, TemplateLiteral, ThisExpression, ThrowStatement, TryStatement, UnaryExpression, UpdateExpression, VariableDeclaration, VariableDeclarator, WhileStatement, WithStatement, YieldExpression, TSEnumDeclaration, BindingName, TSAsExpression, TSInterfaceDeclaration, TSTypeAssertion, TSModuleDeclaration, TSModuleBlock, TSDeclareFunction, TSAbstractMethodDefinition, BaseNode, TSEnumMember, TSTypeAnnotation } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
 import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree/dist/ts-estree/ast-node-types';
 
 export interface TsInfoBase {
@@ -9,12 +9,14 @@ export interface TsPropInfo extends TsInfoBase {
   type: AST_NODE_TYPES.ClassProperty;
   name: string;
   isStatic: boolean;
+  varType: TSTypeAnnotation;
 }
 
 export interface TsFuncInfo extends TsInfoBase {
   type: AST_NODE_TYPES.MethodDefinition;
   name: string;
   isStatic: boolean;
+  returnType: TSTypeAnnotation;
 } 
 
 export interface TsClassInfo extends TsInfoBase {
@@ -88,11 +90,11 @@ export class TsCollector {
     for(let cbb of ast.body.body) {
       if(cbb.type == AST_NODE_TYPES.ClassProperty) {
         let cp = cbb as ClassProperty;
-        let cpInfo: TsPropInfo = { type: AST_NODE_TYPES.ClassProperty, name: (cp.key as Identifier).name, isStatic: cp.static };
+        let cpInfo: TsPropInfo = { type: AST_NODE_TYPES.ClassProperty, name: (cp.key as Identifier).name, isStatic: cp.static, varType: cp.typeAnnotation };
         info.properties[cpInfo.name] = cpInfo;
       } else if(cbb.type == AST_NODE_TYPES.MethodDefinition) {
         let md = cbb as MethodDefinition;
-        let mdInfo: TsFuncInfo = { type: AST_NODE_TYPES.MethodDefinition, name: (md.key as Identifier).name, isStatic: md.static };
+        let mdInfo: TsFuncInfo = { type: AST_NODE_TYPES.MethodDefinition, name: (md.key as Identifier).name, isStatic: md.static, returnType: md.value.returnType };
         info.funcs[mdInfo.name] = mdInfo;
       }
     }

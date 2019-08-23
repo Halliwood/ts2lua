@@ -15,22 +15,10 @@ let requireContent = '';
 let funcReplConf: {[func: string]: string} = {};
 let regexReplConf: {[regex: string]: string} = {};
 
-
-  
-let luaExt: string = '.lua';
-let luaStyle: string = 'xlua';
-let addTip: boolean = true;
-let breakUpFiles: boolean = true;
-let requireAllInOne: boolean = false;
-let translateRegex: boolean;
-let traceUnknowRegex: string;
-
 let opt: TranslateOption = { 
   ext: '.lua', 
   style: 'xlua', 
   addTip: true, 
-  breakUpFiles: true, 
-  requireAllInOne: false,
   funcReplConfJson: path.join(__dirname, 'lib\\func.json'),
   regexReplConfTxt: path.join(__dirname, 'lib\\regex.txt'),
   translateRegex: false,
@@ -61,8 +49,8 @@ export function translate(tsCode: string, option?: TranslateOption): string {
 
   const parsed = parser.parse(tsCode);
   tc.collect(parsed);
-  lm.setClassMap(tc.classMap);
-  let luaCode = lm.toLua(parsed, 'Source', '');
+  lm.setClassMap(tc.classMap, tc.enumMap);
+  let luaCode = lm.toLuaBySource(parsed);
   collectUnknowRegex();
   return luaCode;
 }
@@ -78,7 +66,7 @@ export function translateFiles(inputPath: string, outputPath: string, option?: T
   // copy class.lua & trycatch.lua
   fs.mkdirSync(outputPath, { recursive: true });
   for(let luaFile of luaFilesToCopy) {
-    fs.copyFileSync(path.join(__dirname, 'lua', luaFile) + '.lua', path.join(outputPath, luaFile) + luaExt);
+    fs.copyFileSync(path.join(__dirname, 'lua', luaFile) + '.lua', path.join(outputPath, luaFile) + opt.ext);
   }
 
   inputFolder = inputPath;
@@ -87,21 +75,17 @@ export function translateFiles(inputPath: string, outputPath: string, option?: T
   let inputStat = fs.statSync(inputPath);
   if(inputStat.isFile()) {
     collectClass(inputPath);
-    lm.setClassMap(tc.classMap);
+    lm.setClassMap(tc.classMap, tc.enumMap);
     doTranslateFile(inputPath);
   } else {
     console.log('Processing... Please wait.');
     readDir(inputPath, true);
     console.log('Making lua... Please wait.');
-    lm.setClassMap(tc.classMap);
+    lm.setClassMap(tc.classMap, tc.enumMap);
     readDir(inputPath, false);
   }
 
-  if(requireAllInOne) {
-    fs.writeFileSync(path.join(outputPath, 'require') + luaExt, requireContent);
-  }
-
-  console.log("\x1B[36m%d\x1B[0m .lua files generated.", fileCnt);
+  console.log("\x1B[36m%d\x1B[0m .ts files translated.", fileCnt);
   collectUnknowRegex();
 }
 
@@ -134,29 +118,34 @@ function collectClass(filePath: string) {
 }
 
 function doTranslateFile(filePath: string) {
+  if(filePath.match(/\.d\.ts$/i)) return;
   // console.log('parsing: ', filePath);
-  const fileContent = fs.readFileSync(filePath, 'utf-8');
-  // const parsed = parser.parse(fileContent);
   const parsed = astMap[filePath];
 
   let outFilePath = filePath.replace(inputFolder, outputFolder);
-  let fileFolder = outFilePath.substr(0, outFilePath.lastIndexOf('\\'));
-  fs.mkdirSync(fileFolder, { recursive: true });
+  let outFilePP = path.parse(outFilePath);
 
   if(devMode) {
     let str = util.inspect(parsed, true, 100);
     fs.writeFileSync(outFilePath.replace(/\.ts$/, '.txt'), str);
   }
 
-  let luaContent = lm.toLua(parsed, filePath, inputFolder);
-  let luaFilePath = outFilePath.replace(/\.ts$/, luaExt);
-  fs.writeFileSync(luaFilePath, luaContent);
-
-  if(requireAllInOne) {
-    let importStr = path.relative(inputFolder, filePath).replace(/\\+/g, '/');
-    requireContent += 'require("' + importStr.substr(0, importStr.length - 3) + '")\n';
+  let luaContent = lm.toLuaByFile(parsed, filePath, inputFolder);
+  if(luaContent) {
+    let luaFilePath = outFilePath.replace(/\.ts$/, opt.ext);
+    fs.mkdirSync(outFilePP.dir, { recursive: true });
+    fs.writeFileSync(luaFilePath, luaContent);
   }
 
+  let dotIndex = outFilePP.name.indexOf('.');
+  let diffDir = outFilePP.dir + '\\' + (dotIndex >= 0 ? outFilePP.name.substr(0, dotIndex) : outFilePP.name);
+  for(let className in lm.classContentMap) {
+    let classContent = lm.classContentMap[className];
+    let classFilePath = diffDir + '\\' + className + opt.ext;
+    let fileFolder = classFilePath.substr(0, classFilePath.lastIndexOf('\\'));
+    fs.mkdirSync(fileFolder, { recursive: true });
+    fs.writeFileSync(classFilePath, classContent);
+  }
   fileCnt++;
 }
 
@@ -164,12 +153,14 @@ function processOption(option?: TranslateOption) {
   for(let key in option) {
     opt[key] = option[key];
   }
-  if(option.funcReplConfJson) {
-    let frj = fs.readFileSync(option.funcReplConfJson, 'utf-8');
+  if(opt.funcReplConfJson) {
+    let frj = fs.readFileSync(opt.funcReplConfJson, 'utf-8');
     funcReplConf = JSON.parse(frj);
+    console.log("Using \x1B[36m%s\x1B[0m ...", opt.funcReplConfJson);
+    console.log(frj);
   }
-  if(option.regexReplConfTxt) {
-    let rrt = fs.readFileSync(option.regexReplConfTxt, 'utf-8');
+  if(opt.regexReplConfTxt) {
+    let rrt = fs.readFileSync(opt.regexReplConfTxt, 'utf-8');
     let rrLines = rrt.split(/[\r\n]+/);
     for(let rrline of rrLines) {
       if(rrline) {
@@ -179,18 +170,20 @@ function processOption(option?: TranslateOption) {
         }
       }
     }
+    console.log("Using \x1B[36m%s\x1B[0m ...", opt.regexReplConfTxt);
+    console.log(rrt);
   }
   lm.setEnv(devMode, opt, funcReplConf, regexReplConf);
 }
 
 function collectUnknowRegex() {
-  if(traceUnknowRegex && lm.unknowRegexs.length > 0) {
+  if(opt.traceUnknowRegex && lm.unknowRegexs.length > 0) {
     lm.unknowRegexs.sort();
     let unknowRegexContent = '';
     for(let ur of lm.unknowRegexs) {
       unknowRegexContent += ur + ',\n';
     }
-    fs.writeFileSync(traceUnknowRegex, unknowRegexContent, 'utf-8');
+    fs.writeFileSync(opt.traceUnknowRegex, unknowRegexContent, 'utf-8');
 
     console.log("\x1B[36m%d\x1B[0m unknown regular expression.", lm.unknowRegexs.length);
   }

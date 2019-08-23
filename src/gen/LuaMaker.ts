@@ -2,8 +2,9 @@ import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpre
 import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree';
 import util = require('util');
 import path = require('path');
-import { TsClassInfo } from './TsCollector';
+import { TsClassInfo, TsEnumInfo } from './TsCollector';
 import { TranslateOption } from './TranslateOption';
+import { stringify } from 'querystring';
 
 export class LuaMaker {
   private readonly noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier, AST_NODE_TYPES.CallExpression, AST_NODE_TYPES.TSAsExpression];
@@ -137,23 +138,31 @@ export class LuaMaker {
     return ast.__calPriority;
   }
   
-  private usedIdMap: { [id: string]: boolean } = {}
-  private importAsts: ImportDeclaration[] = [];
-  private importContents: string[] = [];
-  private enumContents: string[] = [];
+  private isDevMode = false;
+  private option: TranslateOption;
   private classMap: { [name: string]: TsClassInfo };
-  private allClasses: string[] = [];
-  private classQueue: string[] = [];
+  private enumMap: { [name: string]: TsEnumInfo };
+  private funcReplConf: {[func: string]: string} = {};
+  private regexReplConf: {[regex: string]: string} = {};
+  
+  private filePath: string;
+  private fileName: string;
+  private rootPath: string;
+  private usedIdMapByClass: { [className: string]: { [id: string]: number } } = {};
+  private importAsts: ImportDeclaration[] = [];
+  private imports: string[] = [];
+  private importMapByClass: { [className: string]: string[] } = {};
+  private className: string;
+  private isDiffClass: boolean;
+  private hasClass: boolean;
+  public classContentMap: { [className: string]: string } = {};
+  private diffClassNames: string[] = [];
+  private diffEnumNames: string[] = [];
+  private nativeEnumNames: string[] = [];
   private moduleQueue: string[] = [];
   private hasContinue = false;
   private inSwitchCase = false;
   private inStatic = false;
-  
-  private filePath: string;
-  private isDevMode = false;
-  private option: TranslateOption;
-  private funcReplConf: {[func: string]: string} = {};
-  private regexReplConf: {[regex: string]: string} = {};
 
   public unknowRegexs: string[] = [];
 
@@ -164,57 +173,118 @@ export class LuaMaker {
     this.regexReplConf = regexReplConf;
   }
 
-  public setClassMap(classMap: { [name: string]: TsClassInfo }) {
+  public setClassMap(classMap: { [name: string]: TsClassInfo }, enumMap: { [name: string]: TsEnumInfo }) {
     this.classMap = classMap;
+    this.enumMap = enumMap;
+  }
+
+  public toLuaBySource(ast: any): string {
+    this.fileName = '__Source__';
+    return this.toLuaInternal(ast, '', '');
   }
   
-  public toLua(ast: any, pfilePath: string, rootPath: string): string {
-    this.filePath = pfilePath;
+  public toLuaByFile(ast: any, filePath: string, rootPath: string): string {
+    let fp = path.parse(filePath);
+    this.fileName = fp.name;
+    return this.toLuaInternal(ast, filePath, rootPath);
+  }
+
+  private toLuaInternal(ast: any, filePath: string, rootPath: string): string {
+    this.filePath = filePath;
+    this.rootPath = rootPath;
   
-    this.usedIdMap = {};
-    this.importContents.length = 0;
-    this.enumContents.length = 0;
+    this.usedIdMapByClass = {};
+    this.usedIdMapByClass[this.fileName] = {};
+    this.imports = [];
+    this.importMapByClass = {};
+    this.importMapByClass[this.fileName] = [];
+    this.diffClassNames.length = 0;
+    this.diffEnumNames.length = 0;
+    this.nativeEnumNames.length = 0;
     this.importAsts.length = 0;
-    this.allClasses.length = 0;
-    this.classQueue.length = 0;
-    let outStr = '';
+    this.className = null;
+    this.hasClass = false;
+    this.classContentMap = {};
+
     let content = this.codeFromAST(ast);
+    let outStr = this.afterTreatment(content, this.fileName, this.hasClass);
+    
+    for(let className of this.diffClassNames) {
+      this.classContentMap[className] = this.afterTreatment(this.classContentMap[className], className, true);
+    }
+    for(let enumName of this.nativeEnumNames) {
+      delete this.classContentMap[enumName];
+    }
+    return outStr;
+  }
+
+  private afterTreatment(content: string, className: string, hasClass: boolean) {
+    let outStr = '';
+
     content = content.replace(/console[\.|:]log/g, 'print');
     content = this.formatTip(content);
     content = this.formatPop(content);
     if('xlua' == this.option.style) {
       content = content.replace(/UnityEngine\./g, 'CS.UnityEngine.');
     }
-  
-    if(!this.option.requireAllInOne) {
-      if(this.allClasses.length > 0) {
-        this.importContents.push('class');
-      }
-      for(let ia of this.importAsts) {
-        let importIsUsed = false;
-        for(let s of ia.specifiers) {
-          if(this.usedIdMap[s.local.name]) {
-            importIsUsed = true;
-            break;
+
+    let imports: string[] = this.importMapByClass[className];
+    if(hasClass) {
+      imports.push('class');
+    }
+    let uim = this.usedIdMapByClass[className];
+    for(let ia of this.importAsts) {
+      let importSource = (ia.source as Literal).value as string;
+      let importPP = path.parse(importSource);
+      for(let s of ia.specifiers) {
+        let importedName: string;
+        if(s.type == AST_NODE_TYPES.ImportDefaultSpecifier || s.type == AST_NODE_TYPES.ImportNamespaceSpecifier) {
+          importedName = s.local.name;
+        } else {
+          importedName = (s as ImportSpecifier).imported.name;
+        }
+        if(uim[s.local.name] > 0) {
+          let importPath: string;
+          if(importedName != importPP.name && (this.classMap[importedName] || this.enumMap[importedName])) {
+            importPath = importPP.dir + '/' + importPP.name + '/' + importedName;
+          } else {
+            importPath = importPP.dir + '/' + importedName;
+          }          
+          if(imports.indexOf(importPath) < 0) {
+            imports.push(importPath);
           }
         }
-        if(importIsUsed) {
-          let p = (ia.source as Literal).value as string;
-          if(this.importContents.indexOf(p) < 0) {
-            this.importContents.push(p);
-          }
-        }
-      }
-      this.importContents.sort();
-      for(let p of this.importContents) {
-        if(p.indexOf('./') == 0 || p.indexOf('../') == 0) {
-          p = path.relative(rootPath, path.join(path.dirname(pfilePath), p)).replace(/\\+/g, '/');
-        } 
-        outStr += 'require("' + p + '")\n';
       }
     }
+    for(let diffClassName of this.diffClassNames) {
+      if(uim[diffClassName] > 0) {
+        let importPath: string = './' + this.fileName + '/' + diffClassName;         
+        if(imports.indexOf(importPath) < 0) {
+          imports.push(importPath);
+        }
+      } 
+    }
+    for(let diffEnumName of this.diffEnumNames) {
+      if(uim[diffEnumName] > 0) {
+        let importPath: string = './' + this.fileName + '/' + diffEnumName;         
+        if(imports.indexOf(importPath) < 0) {
+          imports.push(importPath);
+        }
+      } 
+    }
+    imports.sort();
+    for(let p of imports) {
+      if(p.indexOf('./') == 0 || p.indexOf('../') == 0) {
+        p = path.relative(this.rootPath, path.join(path.dirname(this.filePath), p)).replace(/\\+/g, '/');
+      } 
+      outStr += 'require("' + p + '")\n';
+    }
 
-    outStr += this.enumContents.join('\n');
+    if(this.fileName == className) {
+      for(let enumName in this.nativeEnumNames) {
+        outStr += this.classContentMap[enumName] + '\n';
+      }
+    }
     
     outStr += content;
     return outStr;
@@ -725,7 +795,7 @@ export class LuaMaker {
       str = 'typeof(' + calleeStr.substr(0, calleeStr.length - 8) + ')';
     } else {
       if(typeof(funcRepl) === 'string') {
-        calleeStr = calleeStr.replace(/(?<=:)\w+$/, funcRepl);
+        calleeStr = calleeStr.replace(/(?<=[\.:])\w+$/, funcRepl);
       }
       str = calleeStr + '(';
       str += allAgmStr;
@@ -762,15 +832,20 @@ export class LuaMaker {
     if (ast.superTypeParameters) {
       // TSTypeParameterInstantiation;
     }
-    if (ast.id) {
-      // Identifier
-      let className = this.codeFromAST(ast.id);
-      this.allClasses.push(className);
-      this.classQueue.push(className);
-      str = str.replace('$ClassName$', className);
-    } else {
+    if (!ast.id) {
       this.assert(false, ast, 'Class name is necessary!');
+    } 
+    let className = this.codeFromAST(ast.id);
+    this.usedIdMapByClass[this.fileName][className]--;
+    this.className = className;
+    this.isDiffClass = this.filePath && (ast as any).__exported && this.fileName != className;
+    if(!this.usedIdMapByClass[className]) {
+      this.usedIdMapByClass[className] = {};
     }
+    if(!this.importMapByClass[className]) {
+      this.importMapByClass[className] = [];
+    }
+    str = str.replace('$ClassName$', className);
     str += this.codeFromClassBody(ast.body);
     if (ast.superClass) {
       str = str.replace('$BaseClass$', this.codeFromAST(ast.superClass));
@@ -791,7 +866,16 @@ export class LuaMaker {
       // Decorator[];
       this.assert(false, ast);
     }
-    this.classQueue.pop();
+
+    if(this.isDiffClass) {
+      // save as another file
+      this.diffClassNames.push(className);
+      this.classContentMap[className] = str;
+      str = '';
+    } else {
+      this.hasClass = true;
+    }
+    this.className = null;
     return str;
   }
   
@@ -803,11 +887,10 @@ export class LuaMaker {
   private codeFromClassProperty(ast: ClassProperty): string {
     let str = '';
     if (ast.value) {
-      let className = this.classQueue[this.classQueue.length - 1];
       if (ast.static) {
-        str = className + '.' + this.codeFromAST(ast.key) + ' = ' + this.codeFromAST(ast.value) + ';';
+        str = this.className + '.' + this.codeFromAST(ast.key) + ' = ' + this.codeFromAST(ast.value) + ';';
       } else {
-        str = className + '.prototype.' + this.codeFromAST(ast.key) + ' = ' + this.codeFromAST(ast.value) + ';';
+        str = this.className + '.prototype.' + this.codeFromAST(ast.key) + ' = ' + this.codeFromAST(ast.value) + ';';
       }
       // readonly?: boolean;
       // decorators?: Decorator[];
@@ -939,13 +1022,12 @@ export class LuaMaker {
         // 比如匿名函数
         str = 'function ' + funcName + '(';
       } else {
-        let className = this.classQueue[this.classQueue.length - 1];
-        if (className) {
+        if (this.className) {
           // 成员函数
           if(isStatic) {
-            str = 'function ' + className + '.' + funcName + '(';
+            str = 'function ' + this.className + '.' + funcName + '(';
           } else {
-            str = 'function ' + className + '.prototype:' + funcName + '(';
+            str = 'function ' + this.className + '.prototype:' + funcName + '(';
           }
         } else {
           let moduleName = this.moduleQueue[this.moduleQueue.length - 1];
@@ -1003,12 +1085,12 @@ export class LuaMaker {
   
   private codeFromIdentifier(ast: Identifier): string {
     let str = ast.name;
+    this.addUsedId(str);
     if(this.luaKeyWords.indexOf(str) >= 0) {
       str = 'tsvar_' + str;
     } else if(str.substr(0, 1) == '$') {
       str = 'tsvar_' + str.substr(1);
     }
-    this.usedIdMap[str] = true;
     return str;
   }
   
@@ -1072,7 +1154,13 @@ export class LuaMaker {
         this.unknowRegexs.push(ast.regex.pattern);
       }
       if(this.option.translateRegex) {
-        return '\'' + ast.regex.pattern.replace(/\\(?!\\)/g, '%') + '\'';
+        let luaRegex = ast.regex.pattern.replace(/(?<!\\)\\(?!\\)/g, '%');
+        luaRegex = luaRegex.replace(/(?<!\\)\\\\\\(?!\\)/g, '\\\\%');
+        luaRegex = luaRegex.replace(/(?<!\\)\\\\\\\\\\(?!\\)/g, '\\\\\\\\%');
+        luaRegex = luaRegex.replace(/(?<!\\)\\\\\\\\\\\\\\(?!\\)/g, '\\\\\\\\\\\\%');
+        luaRegex = luaRegex.replace(/(?<!\\)\\\\\\\\\\\\\\\\\\(?!\\)/g, '\\\\\\\\\\\\\\\\%');
+        luaRegex = luaRegex.replace(/(?<!\\)\\\\\\\\\\\\\\\\\\\\\\(?!\\)/g, '\\\\\\\\\\\\\\\\\\\\%');
+        return '\'' + luaRegex + '\'';
       }
       return ast.raw + this.wrapTip('tslua无法自动转换正则表达式，请手动处理。');
     }
@@ -1166,7 +1254,7 @@ export class LuaMaker {
   private codeFromNewExpression(ast: NewExpression): string {
     let callee = this.codeFromAST(ast.callee);
     if('Date' == callee) {
-      this.importContents.push('date');
+      this.addImport('date');
     }
     if (this.calPriority(ast.callee) > this.calPriority(ast)) {
       callee = '(' + callee + ')';
@@ -1251,8 +1339,7 @@ export class LuaMaker {
   }
   
   private codeFromSuper(ast: Super): string {
-    let className = this.classQueue[this.classQueue.length - 1];
-    return className + '.super';
+    return this.className + '.super';
   }
   
   private codeFromSwitchCase(ast: SwitchCase): string {
@@ -1316,7 +1403,7 @@ export class LuaMaker {
   
   private codeFromThisExpression(ast: ThisExpression): string {
     if(this.inStatic) {
-      return this.classQueue[this.classQueue.length - 1];
+      return this.className;
     }
     return 'self';
   }
@@ -1326,7 +1413,8 @@ export class LuaMaker {
   }
   
   private codeFromTryStatement(ast: TryStatement): string {
-    this.importContents.push('trycatch');
+    this.addImport('trycatch');
+
     let str = 'try_catch{\n';
     let tcStr = 'main = function()\n';
     tcStr += this.indent(this.codeFromAST(ast.block));
@@ -1485,7 +1573,8 @@ export class LuaMaker {
     if(!(ast as any).__exported) {
       str += 'local ';
     }
-    str += this.codeFromAST(ast.id) + ' = {\n';
+    let enumName = this.codeFromAST(ast.id);
+    str += enumName + ' = {\n';
     let membersStr = '';
     let nextValue = 0;
     for(let i = 0, len = ast.members.length; i < len; i++) {
@@ -1508,7 +1597,13 @@ export class LuaMaker {
     this.assert(!ast.declare, ast);
     this.assert(!ast.modifiers, ast);
     this.assert(!ast.decorators, ast);
-    this.enumContents.push(str);
+
+    if(this.filePath && (ast as any).__exported && this.fileName != enumName) {
+      this.diffEnumNames.push(enumName);
+    } else {
+      this.nativeEnumNames.push(enumName);
+    }
+    this.classContentMap[enumName] = str;
     return '';
   }
   
@@ -1608,6 +1703,29 @@ export class LuaMaker {
       }
     }
     return regexRepl;
+  }
+
+  private addUsedId(id: string) {
+    let map: { [id: string]: number };
+    if(this.className && this.isDiffClass) {
+      map = this.usedIdMapByClass[this.className];
+    } else {
+      map = this.usedIdMapByClass[this.fileName];
+    }
+    if(map[id]) {
+      map[id]++;  
+    } else {
+      map[id] = 1;
+    }
+  }
+
+  private addImport(importName: string) {
+    this.imports.push(importName);
+    if(this.className && this.isDiffClass) {
+      this.importMapByClass[this.className].push(importName);
+    } else {
+      this.importMapByClass[this.fileName].push(importName);
+    }
   }
   
   private pintHit(ast: any): void {
