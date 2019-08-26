@@ -29,6 +29,7 @@ var LuaMaker = /** @class */ (function () {
         this.hasContinue = false;
         this.inSwitchCase = false;
         this.inStatic = false;
+        this.classPropDefStr = '';
         this.unknowRegexs = [];
         this.setPriority(['( … )'], this.pv++);
         this.setPriority(['… . …', '… [ … ]', 'new … ( … )', '… ( … )'], this.pv++);
@@ -696,6 +697,7 @@ var LuaMaker = /** @class */ (function () {
     };
     LuaMaker.prototype.codeFromClassBody = function (ast) {
         var str = '';
+        this.classPropDefStr = '';
         for (var i = 0, len = ast.body.length; i < len; i++) {
             var cbodyStr = this.codeFromAST(ast.body[i]);
             if (cbodyStr) {
@@ -703,6 +705,30 @@ var LuaMaker = /** @class */ (function () {
                     str += '\n';
                 }
                 str += cbodyStr;
+            }
+        }
+        if (this.classPropDefStr) {
+            var propDefPos = -1;
+            var superStr = this.className + '.super()';
+            var superStrPos = str.indexOf(superStr);
+            if (superStrPos >= 0) {
+                propDefPos = superStrPos + superStr.length + 1;
+            }
+            else {
+                var ctorStr = 'function ' + this.className + '.prototype:ctor()';
+                var ctorStrPos = str.indexOf(ctorStr);
+                if (ctorStrPos >= 0) {
+                    propDefPos = ctorStrPos + ctorStr.length + 1;
+                }
+            }
+            if (propDefPos >= 0) {
+                str = str.substr(0, propDefPos) + this.indent(this.classPropDefStr) + '\n' + str.substr(propDefPos);
+            }
+            else {
+                str = 'function ' + this.className + '.prototype:ctor()\n' +
+                    this.indent(this.classPropDefStr) +
+                    '\nend\n' +
+                    str;
             }
         }
         return str;
@@ -773,7 +799,10 @@ var LuaMaker = /** @class */ (function () {
                 str = this.className + '.' + this.codeFromAST(ast.key) + ' = ' + this.codeFromAST(ast.value) + ';';
             }
             else {
-                str = this.className + '.prototype.' + this.codeFromAST(ast.key) + ' = ' + this.codeFromAST(ast.value) + ';';
+                if (this.classPropDefStr) {
+                    this.classPropDefStr += '\n';
+                }
+                this.classPropDefStr += 'self.' + this.codeFromAST(ast.key) + ' = ' + this.codeFromAST(ast.value) + ';';
             }
             // readonly?: boolean;
             // decorators?: Decorator[];

@@ -163,6 +163,7 @@ export class LuaMaker {
   private hasContinue = false;
   private inSwitchCase = false;
   private inStatic = false;
+  private classPropDefStr = '';
 
   public unknowRegexs: string[] = [];
 
@@ -822,6 +823,7 @@ export class LuaMaker {
   
   private codeFromClassBody(ast: ClassBody): string {
     let str = '';
+    this.classPropDefStr = '';
     for (let i = 0, len = ast.body.length; i < len; i++) {
       let cbodyStr = this.codeFromAST(ast.body[i]);
       if(cbodyStr) {
@@ -829,6 +831,29 @@ export class LuaMaker {
           str += '\n';
         }
         str += cbodyStr;
+      }
+    }
+    if(this.classPropDefStr) {
+      let propDefPos = -1;
+      let superStr = this.className + '.super()';
+      let superStrPos = str.indexOf(superStr);
+      if(superStrPos >= 0) {
+        propDefPos = superStrPos + superStr.length + 1;
+      } else {
+        let ctorStr = 'function ' + this.className + '.prototype:ctor()';
+        let ctorStrPos = str.indexOf(ctorStr);
+        if(ctorStrPos >= 0) {
+          propDefPos = ctorStrPos + ctorStr.length + 1;
+        }
+      }
+
+      if(propDefPos >= 0) {
+        str = str.substr(0, propDefPos) + this.indent(this.classPropDefStr) + '\n' + str.substr(propDefPos);
+      } else {
+        str = 'function ' + this.className + '.prototype:ctor()\n' + 
+        this.indent(this.classPropDefStr) + 
+        '\nend\n' + 
+        str;
       }
     }
     return str;
@@ -900,7 +925,10 @@ export class LuaMaker {
       if (ast.static) {
         str = this.className + '.' + this.codeFromAST(ast.key) + ' = ' + this.codeFromAST(ast.value) + ';';
       } else {
-        str = this.className + '.prototype.' + this.codeFromAST(ast.key) + ' = ' + this.codeFromAST(ast.value) + ';';
+        if(this.classPropDefStr) {
+          this.classPropDefStr += '\n';
+        }
+        this.classPropDefStr += 'self.' + this.codeFromAST(ast.key) + ' = ' + this.codeFromAST(ast.value) + ';';
       }
       // readonly?: boolean;
       // decorators?: Decorator[];
