@@ -7,13 +7,15 @@ import { TranslateOption } from './TranslateOption';
 import { stringify } from 'querystring';
 
 export class LuaMaker {
-  private readonly noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier, AST_NODE_TYPES.CallExpression, AST_NODE_TYPES.TSAsExpression];
+  private readonly noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier, AST_NODE_TYPES.CallExpression, AST_NODE_TYPES.TSAsExpression, AST_NODE_TYPES.TSTypeAssertion];
 
   // TODO: Typeof's return value may be different between ts and lua
   private readonly tsType2luaType = {
     'undefined': 'nil',
     'object': 'table'
   };
+
+  private readonly ignoreExpressionType = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.Identifier];
   
   private readonly luaKeyWords = ['and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while'];
   
@@ -278,6 +280,12 @@ export class LuaMaker {
         }
       } 
     }
+    if(className != this.fileName && uim[this.fileName] > 0) {
+      let importPath: string = './' + this.fileName;         
+      if(imports.indexOf(importPath) < 0) {
+        imports.push(importPath);
+      }
+    } 
     imports.sort();
     for(let p of imports) {
       if(p.indexOf('./') == 0 || p.indexOf('../') == 0) {
@@ -736,11 +744,17 @@ export class LuaMaker {
   
     let str = '';
     let astType = (ast as any).type;
-    if(astType == AST_NODE_TYPES.AssignmentExpression && ast.right.type == AST_NODE_TYPES.AssignmentExpression) {
-      // 处理 a = b = c
-      str = right + '\n';
-      right = this.codeFromAST((ast.right as AssignmentExpression).left);
-    }
+    if(astType == AST_NODE_TYPES.AssignmentExpression) {
+      if(ast.right.type == AST_NODE_TYPES.AssignmentExpression) {
+        // 处理 a = b = c
+        str = right + '\n';
+        right = this.codeFromAST((ast.right as AssignmentExpression).left);
+      } else if(ast.right.type == AST_NODE_TYPES.UpdateExpression && (ast.right as UpdateExpression).prefix) {
+        // 处理 a = ++b
+        str = right + '\n';
+        right = this.codeFromAST((ast.right as UpdateExpression).argument);
+      }
+    } 
   
     if(isSelfOperator) {
       return str + left + ' = ' + left + ' ' + optStr + ' ' + right;
@@ -752,7 +766,14 @@ export class LuaMaker {
   private codeFromBlockStatement(ast: BlockStatement): string {
     let str = '';
     for (let i = 0, len = ast.body.length; i < len; i++) {
-      let bstr = this.codeFromAST(ast.body[i]);
+      let bodyEle = ast.body[i];
+      if(this.option.ignoreNoUsedExp && 
+        bodyEle.type == AST_NODE_TYPES.ExpressionStatement && 
+        this.ignoreExpressionType.indexOf((bodyEle as ExpressionStatement).expression.type) >= 0) {
+          console.log('ignore statement at \x1B[36m%s\x1B[0m:\x1B[33m%d:%d\x1B[0m', this.filePath, bodyEle.loc.start.line, bodyEle.loc.start.column);
+          continue;
+        }
+      let bstr = this.codeFromAST(bodyEle);
       if(bstr) {
         if (i > 0) {
           str += '\n';
@@ -1022,7 +1043,7 @@ export class LuaMaker {
     str += 'repeat\n';
     let repeatBodyStr = this.codeFromAST(ast.body);
     if(this.hasContinue) {
-      repeatBodyStr = 'repeat\n' + this.indent(repeatBodyStr + '\nbreak') + '\nuntil true'
+      repeatBodyStr = 'repeat\n' + this.indent(repeatBodyStr) + '\nuntil true'
     }
     if (ast.update) {
       repeatBodyStr += '\n';
@@ -1198,6 +1219,7 @@ export class LuaMaker {
         luaRegex = luaRegex.replace(/(?<!\\)\\\\\\\\\\\\\\(?!\\)/g, '\\\\\\\\\\\\%');
         luaRegex = luaRegex.replace(/(?<!\\)\\\\\\\\\\\\\\\\\\(?!\\)/g, '\\\\\\\\\\\\\\\\%');
         luaRegex = luaRegex.replace(/(?<!\\)\\\\\\\\\\\\\\\\\\\\\\(?!\\)/g, '\\\\\\\\\\\\\\\\\\\\%');
+        luaRegex = luaRegex.replace(/'/g, '\\\'');
         return '\'' + luaRegex + '\'';
       }
       return ast.raw + this.wrapTip('tslua无法自动转换正则表达式，请手动处理。');
@@ -1297,7 +1319,7 @@ export class LuaMaker {
     if (this.calPriority(ast.callee) > this.calPriority(ast)) {
       callee = '(' + callee + ')';
     }
-    if('Array' == callee && ast.arguments.length == 0) {
+    if('Array' == callee/* && ast.arguments.length == 0*/) {
       return '{}';
     }
     let argStr = '';
@@ -1358,7 +1380,19 @@ export class LuaMaker {
     if(!ast.argument) {
       return 'return';
     }
-    return 'return ' + this.codeFromAST(ast.argument);
+    let argStr = this.codeFromAST(ast.argument);
+    if(ast.argument.type == AST_NODE_TYPES.UpdateExpression) {
+      let uaStr = this.codeFromAST((ast.argument as UpdateExpression).argument);
+      if((ast.argument as UpdateExpression).prefix) {
+        return argStr + '\nreturn ' + uaStr;
+      } else {
+        let newVarName = this.getVarNameBefore(uaStr);
+        if(newVarName) {
+          return 'local ' + newVarName + ' = ' + uaStr + '\n' + argStr + '\nreturn ' + uaStr;
+        }
+      }
+    }
+    return 'return ' + argStr;
   }
   
   private codeFromSequenceExpression(ast: SequenceExpression): string {
@@ -1516,9 +1550,8 @@ export class LuaMaker {
           str = this.wrapPop(str, true);
           str += astr;
         } else {
-          let theVarName = astr.match(/[^\.]+$/);
-          if(theVarName) {
-            let newVarName = theVarName[0].replace(/\[/g, '_').replace(/\]/g, '_') + 'Before';
+          let newVarName = this.getVarNameBefore(astr);
+          if(newVarName) {
             str = this.wrapPop('local ' + newVarName + ' = ' + astr, true) + this.wrapPop(str, true);
             str += newVarName;
           }
@@ -1559,6 +1592,18 @@ export class LuaMaker {
       if(ast.init.type == AST_NODE_TYPES.AssignmentExpression) {
         str = initStr + '\n';
         initStr = this.codeFromAST((ast.init as AssignmentExpression).left);
+      } else if(ast.init.type == AST_NODE_TYPES.UpdateExpression) {
+        let uaStr = this.codeFromAST((ast.init as UpdateExpression).argument);
+        if((ast.init as UpdateExpression).prefix) {
+          str = initStr + '\n';
+          initStr = uaStr;
+        } else {
+          let newVarName = this.getVarNameBefore(uaStr);
+          if(newVarName) {
+            str = 'local ' + newVarName + ' = ' + uaStr + '\n' + initStr + '\n';
+            initStr = uaStr;
+          }
+        }
       }
     }
     if(!(ast as any).__isForInOf) {
@@ -1838,6 +1883,15 @@ export class LuaMaker {
       rema = content.match(re);
     }
     return content;
+  }
+
+  private getVarNameBefore(varName: string): string {
+    let theVarName = varName.match(/[^\.]+$/);
+    if(theVarName) {
+      let newVarName = theVarName[0].replace(/\[/g, '_').replace(/\]/g, '_') + 'Before';
+      return newVarName;
+    }
+    return null;
   }
   
   private assert(cond: boolean, ast: BaseNode, message: string = null) {

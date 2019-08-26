@@ -5,12 +5,13 @@ var util = require("util");
 var path = require("path");
 var LuaMaker = /** @class */ (function () {
     function LuaMaker() {
-        this.noBraceTypes = [typescript_estree_1.AST_NODE_TYPES.MemberExpression, typescript_estree_1.AST_NODE_TYPES.ThisExpression, typescript_estree_1.AST_NODE_TYPES.Identifier, typescript_estree_1.AST_NODE_TYPES.CallExpression, typescript_estree_1.AST_NODE_TYPES.TSAsExpression];
+        this.noBraceTypes = [typescript_estree_1.AST_NODE_TYPES.MemberExpression, typescript_estree_1.AST_NODE_TYPES.ThisExpression, typescript_estree_1.AST_NODE_TYPES.Identifier, typescript_estree_1.AST_NODE_TYPES.CallExpression, typescript_estree_1.AST_NODE_TYPES.TSAsExpression, typescript_estree_1.AST_NODE_TYPES.TSTypeAssertion];
         // TODO: Typeof's return value may be different between ts and lua
         this.tsType2luaType = {
             'undefined': 'nil',
             'object': 'table'
         };
+        this.ignoreExpressionType = [typescript_estree_1.AST_NODE_TYPES.MemberExpression, typescript_estree_1.AST_NODE_TYPES.Identifier];
         this.luaKeyWords = ['and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while'];
         this.pv = 0;
         this.operatorPriorityMap = {};
@@ -243,6 +244,12 @@ var LuaMaker = /** @class */ (function () {
                 if (imports.indexOf(importPath) < 0) {
                     imports.push(importPath);
                 }
+            }
+        }
+        if (className != this.fileName && uim[this.fileName] > 0) {
+            var importPath = './' + this.fileName;
+            if (imports.indexOf(importPath) < 0) {
+                imports.push(importPath);
             }
         }
         imports.sort();
@@ -613,10 +620,17 @@ var LuaMaker = /** @class */ (function () {
         }
         var str = '';
         var astType = ast.type;
-        if (astType == typescript_estree_1.AST_NODE_TYPES.AssignmentExpression && ast.right.type == typescript_estree_1.AST_NODE_TYPES.AssignmentExpression) {
-            // 处理 a = b = c
-            str = right + '\n';
-            right = this.codeFromAST(ast.right.left);
+        if (astType == typescript_estree_1.AST_NODE_TYPES.AssignmentExpression) {
+            if (ast.right.type == typescript_estree_1.AST_NODE_TYPES.AssignmentExpression) {
+                // 处理 a = b = c
+                str = right + '\n';
+                right = this.codeFromAST(ast.right.left);
+            }
+            else if (ast.right.type == typescript_estree_1.AST_NODE_TYPES.UpdateExpression && ast.right.prefix) {
+                // 处理 a = ++b
+                str = right + '\n';
+                right = this.codeFromAST(ast.right.argument);
+            }
         }
         if (isSelfOperator) {
             return str + left + ' = ' + left + ' ' + optStr + ' ' + right;
@@ -626,7 +640,14 @@ var LuaMaker = /** @class */ (function () {
     LuaMaker.prototype.codeFromBlockStatement = function (ast) {
         var str = '';
         for (var i = 0, len = ast.body.length; i < len; i++) {
-            var bstr = this.codeFromAST(ast.body[i]);
+            var bodyEle = ast.body[i];
+            if (this.option.ignoreNoUsedExp &&
+                bodyEle.type == typescript_estree_1.AST_NODE_TYPES.ExpressionStatement &&
+                this.ignoreExpressionType.indexOf(bodyEle.expression.type) >= 0) {
+                console.log('ignore statement at \x1B[36m%s\x1B[0m:\x1B[33m%d:%d\x1B[0m', this.filePath, bodyEle.loc.start.line, bodyEle.loc.start.column);
+                continue;
+            }
+            var bstr = this.codeFromAST(bodyEle);
             if (bstr) {
                 if (i > 0) {
                     str += '\n';
@@ -880,7 +901,7 @@ var LuaMaker = /** @class */ (function () {
         str += 'repeat\n';
         var repeatBodyStr = this.codeFromAST(ast.body);
         if (this.hasContinue) {
-            repeatBodyStr = 'repeat\n' + this.indent(repeatBodyStr + '\nbreak') + '\nuntil true';
+            repeatBodyStr = 'repeat\n' + this.indent(repeatBodyStr) + '\nuntil true';
         }
         if (ast.update) {
             repeatBodyStr += '\n';
@@ -1052,6 +1073,7 @@ var LuaMaker = /** @class */ (function () {
                 luaRegex = luaRegex.replace(/(?<!\\)\\\\\\\\\\\\\\(?!\\)/g, '\\\\\\\\\\\\%');
                 luaRegex = luaRegex.replace(/(?<!\\)\\\\\\\\\\\\\\\\\\(?!\\)/g, '\\\\\\\\\\\\\\\\%');
                 luaRegex = luaRegex.replace(/(?<!\\)\\\\\\\\\\\\\\\\\\\\\\(?!\\)/g, '\\\\\\\\\\\\\\\\\\\\%');
+                luaRegex = luaRegex.replace(/'/g, '\\\'');
                 return '\'' + luaRegex + '\'';
             }
             return ast.raw + this.wrapTip('tslua无法自动转换正则表达式，请手动处理。');
@@ -1152,7 +1174,7 @@ var LuaMaker = /** @class */ (function () {
         if (this.calPriority(ast.callee) > this.calPriority(ast)) {
             callee = '(' + callee + ')';
         }
-        if ('Array' == callee && ast.arguments.length == 0) {
+        if ('Array' == callee /* && ast.arguments.length == 0*/) {
             return '{}';
         }
         var argStr = '';
@@ -1207,7 +1229,20 @@ var LuaMaker = /** @class */ (function () {
         if (!ast.argument) {
             return 'return';
         }
-        return 'return ' + this.codeFromAST(ast.argument);
+        var argStr = this.codeFromAST(ast.argument);
+        if (ast.argument.type == typescript_estree_1.AST_NODE_TYPES.UpdateExpression) {
+            var uaStr = this.codeFromAST(ast.argument.argument);
+            if (ast.argument.prefix) {
+                return argStr + '\nreturn ' + uaStr;
+            }
+            else {
+                var newVarName = this.getVarNameBefore(uaStr);
+                if (newVarName) {
+                    return 'local ' + newVarName + ' = ' + uaStr + '\n' + argStr + '\nreturn ' + uaStr;
+                }
+            }
+        }
+        return 'return ' + argStr;
     };
     LuaMaker.prototype.codeFromSequenceExpression = function (ast) {
         var str = '';
@@ -1359,9 +1394,8 @@ var LuaMaker = /** @class */ (function () {
                     str += astr;
                 }
                 else {
-                    var theVarName = astr.match(/[^\.]+$/);
-                    if (theVarName) {
-                        var newVarName = theVarName[0].replace(/\[/g, '_').replace(/\]/g, '_') + 'Before';
+                    var newVarName = this.getVarNameBefore(astr);
+                    if (newVarName) {
                         str = this.wrapPop('local ' + newVarName + ' = ' + astr, true) + this.wrapPop(str, true);
                         str += newVarName;
                     }
@@ -1401,6 +1435,20 @@ var LuaMaker = /** @class */ (function () {
             if (ast.init.type == typescript_estree_1.AST_NODE_TYPES.AssignmentExpression) {
                 str = initStr + '\n';
                 initStr = this.codeFromAST(ast.init.left);
+            }
+            else if (ast.init.type == typescript_estree_1.AST_NODE_TYPES.UpdateExpression) {
+                var uaStr = this.codeFromAST(ast.init.argument);
+                if (ast.init.prefix) {
+                    str = initStr + '\n';
+                    initStr = uaStr;
+                }
+                else {
+                    var newVarName = this.getVarNameBefore(uaStr);
+                    if (newVarName) {
+                        str = 'local ' + newVarName + ' = ' + uaStr + '\n' + initStr + '\n';
+                        initStr = uaStr;
+                    }
+                }
             }
         }
         if (!ast.__isForInOf) {
@@ -1671,6 +1719,14 @@ var LuaMaker = /** @class */ (function () {
             rema = content.match(re);
         }
         return content;
+    };
+    LuaMaker.prototype.getVarNameBefore = function (varName) {
+        var theVarName = varName.match(/[^\.]+$/);
+        if (theVarName) {
+            var newVarName = theVarName[0].replace(/\[/g, '_').replace(/\]/g, '_') + 'Before';
+            return newVarName;
+        }
+        return null;
     };
     LuaMaker.prototype.assert = function (cond, ast, message) {
         if (message === void 0) { message = null; }

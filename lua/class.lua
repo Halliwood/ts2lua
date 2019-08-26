@@ -41,9 +41,9 @@ end
 
 Class.prototype = {};
 Class.prototype.__index = Class.prototype;
-Class.prototype.__gc = function (instance)
-	print(instance, "destroy");
-end
+-- Class.prototype.__gc = function (instance)
+-- 	print(instance, "destroy");
+-- end
 Class.prototype.ctor = function(instance)
 end
 

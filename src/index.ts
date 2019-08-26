@@ -22,7 +22,8 @@ let opt: TranslateOption = {
   funcReplConfJson: path.join(__dirname, 'lib\\func.json'),
   regexReplConfTxt: path.join(__dirname, 'lib\\regex.txt'),
   translateRegex: false,
-  traceUnknowRegex: undefined
+  traceUnknowRegex: undefined,
+  ignoreNoUsedExp: true
 };
 let tc = new TsCollector();
 let lm = new LuaMaker();
@@ -157,7 +158,7 @@ function processOption(option?: TranslateOption) {
     let frj = fs.readFileSync(opt.funcReplConfJson, 'utf-8');
     funcReplConf = JSON.parse(frj);
     console.log("Using \x1B[36m%s\x1B[0m ...", opt.funcReplConfJson);
-    console.log(frj);
+    // console.log(frj);
   }
   if(opt.regexReplConfTxt) {
     let rrt = fs.readFileSync(opt.regexReplConfTxt, 'utf-8');
@@ -171,7 +172,7 @@ function processOption(option?: TranslateOption) {
       }
     }
     console.log("Using \x1B[36m%s\x1B[0m ...", opt.regexReplConfTxt);
-    console.log(rrt);
+    // console.log(rrt);
   }
   lm.setEnv(devMode, opt, funcReplConf, regexReplConf);
 }

@@ -12,5 +12,7 @@ export interface TranslateOption {
   /**对于没有替换配置的正则表达式，是否尝试简单翻译成lua，默认false。如果为true，则将正则表达式翻译为字符串，将转义符翻译成%。 */
   translateRegex?: boolean,
   /**输出未识别的正则表达式的txt文件路径，默认不输出 */
-  traceUnknowRegex?: string
+  traceUnknowRegex?: string,
+  /**是否忽略代码块中单纯的成员表达式，默认为true */
+  ignoreNoUsedExp?: boolean
 }

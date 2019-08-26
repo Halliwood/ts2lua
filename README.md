@@ -88,6 +88,26 @@ ts2lua.translateFiles('in', 'out', { style: null });
 * 可选字段`regexReplConfTxt`表示用于配置正则表达式转换规则的txt文件的存放路径。ts2lua将根据该文件的映射关系对指定的正则表达式进行翻译，你可以直接修改默认配置`lib\\regex.txt`。
 * 可选字段`translateRegex`若为`true`，则对于正则表达式转换规则json文件中没有配置的正则表达式，ts2lua将简单的进行处理：将正则表达式翻译为字符串，将转义符翻译成%。比如`/\w+/g`将翻译成`'%w+'`。该字段默认为`false`，即原样输出（对lua来说，通常会有语法错误）。
 * 可选字段`traceUnknowRegex`表示未识别正则表达式的输出路径。若指定了该值，则对于正则表达式转换规则json文件中没有配置的正则表达式，ts2lua将记录到一个文件中，方便集中处理后加入到转换配置中。
+* 可选字段`ignoreNoUsedExp`若为`true`，则ts2lua会忽略代码块（`BlockStatement`）中没有实际用途的表达式（包括多余的成员表达式`MemberExpression`和标识`Identifier`访问）。该字段默认为`true`。如下述代码中多余的语句将被忽略：
+
+TypeScript
+```TypeScript
+doStr() {
+  let idx = 2;
+  this.myArr;  // 这句是多余的MemberExpression
+  idx;  // 这句是多余的Identifier
+  console.log('idx == ' + idx);
+}
+```
+
+lua
+```lua
+function doStr()
+  local idx = 2
+  print('idx == ' .. idx)
+end
+```
+
 
 ## 关于变量名、函数名不符合lua规范的处理
 如果变量名、函数名为lua关键字，则自动添加`tsvar_`的前缀。如果包含`$`等lua不支持的字符，则自动将`$`替换为`tsvar_`。
@@ -117,7 +137,7 @@ doStr() {
 
 lua
 ```lua
-function TestSub.prototype:doStr()
+function doStr()
   if self.subValue>10 then
     print('subValue is bigger than 10: '..self.subValue..', yes!')
     

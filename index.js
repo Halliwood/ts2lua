@@ -26,7 +26,8 @@ var opt = {
     funcReplConfJson: path.join(__dirname, 'lib\\func.json'),
     regexReplConfTxt: path.join(__dirname, 'lib\\regex.txt'),
     translateRegex: false,
-    traceUnknowRegex: undefined
+    traceUnknowRegex: undefined,
+    ignoreNoUsedExp: true
 };
 var tc = new TsCollector_1.TsCollector();
 var lm = new LuaMaker_1.LuaMaker();
@@ -153,7 +154,7 @@ function processOption(option) {
         var frj = fs.readFileSync(opt.funcReplConfJson, 'utf-8');
         funcReplConf = JSON.parse(frj);
         console.log("Using \x1B[36m%s\x1B[0m ...", opt.funcReplConfJson);
-        console.log(frj);
+        // console.log(frj);
     }
     if (opt.regexReplConfTxt) {
         var rrt = fs.readFileSync(opt.regexReplConfTxt, 'utf-8');
@@ -168,7 +169,7 @@ function processOption(option) {
             }
         }
         console.log("Using \x1B[36m%s\x1B[0m ...", opt.regexReplConfTxt);
-        console.log(rrt);
+        // console.log(rrt);
     }
     lm.setEnv(devMode, opt, funcReplConf, regexReplConf);
 }
