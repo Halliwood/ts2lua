@@ -1,5 +1,6 @@
 {
   "push": "table.insert",
+  "concat": "table.merge",
   "GetType": "typeof",
   "replace": "gsub",
   "charAt": "sub",

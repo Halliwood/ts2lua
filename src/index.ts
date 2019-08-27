@@ -7,7 +7,7 @@ import { LuaMaker } from './gen/LuaMaker';
 import { TsCollector } from './gen/TsCollector';
 import { Program } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
 
-const luaFilesToCopy: string[] = ['class', 'trycatch', 'date', 'stringutil'];
+const luaFilesToCopy: string[] = ['class', 'trycatch', 'date', 'stringutil', 'tableutil'];
 
 const devMode: boolean = false;
 let fileCnt = 0;

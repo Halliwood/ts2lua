@@ -7,3 +7,4 @@ smartCode.js
 !**/lua/date.lua
 !**/lua/trycatch.lua
 !**/lua/stringutil.lua
+!**/lua/tableutil.lua

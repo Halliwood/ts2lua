@@ -818,9 +818,17 @@ export class LuaMaker {
       funcName = funcNameRegexResult[1];
     }
     let funcRepl = this.funcReplConf[funcName];
-    if(funcRepl == 'table.insert') {
+    if(funcRepl == 'table.insert' || funcRepl == 'table.merge') {
       // Array push change into table.insert
-      str += 'table.insert(' + calleeStr.substr(0, calleeStr.length - 5) + ', ' + allAgmStr + ')';
+      // Array concat change into table.merge
+      str += funcRepl + '(' + calleeStr.substr(0, calleeStr.length - funcName.length - 1);
+      if(allAgmStr) {
+        str += ', ' + allAgmStr;
+      }
+      str += ')';
+      if(funcRepl == 'table.merge') {
+        this.addImport('tableutil');
+      }
     } else if('xlua' == this.option.style && !allAgmStr && funcRepl == 'typeof') {
       str = 'typeof(' + calleeStr.substr(0, calleeStr.length - 8) + ')';
     } else {
