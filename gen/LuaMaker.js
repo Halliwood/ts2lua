@@ -232,7 +232,7 @@ var LuaMaker = /** @class */ (function () {
         }
         for (var _d = 0, _e = this.diffClassNames; _d < _e.length; _d++) {
             var diffClassName = _e[_d];
-            if (uim[diffClassName] > 0) {
+            if (diffClassName != className && uim[diffClassName] > 0) {
                 var importPath = './' + this.fileName + '/' + diffClassName;
                 if (imports.indexOf(importPath) < 0) {
                     imports.push(importPath);
@@ -241,7 +241,7 @@ var LuaMaker = /** @class */ (function () {
         }
         for (var _f = 0, _g = this.diffEnumNames; _f < _g.length; _f++) {
             var diffEnumName = _g[_f];
-            if (uim[diffEnumName] > 0) {
+            if (diffEnumName != className && uim[diffEnumName] > 0) {
                 var importPath = './' + this.fileName + '/' + diffEnumName;
                 if (imports.indexOf(importPath) < 0) {
                     imports.push(importPath);

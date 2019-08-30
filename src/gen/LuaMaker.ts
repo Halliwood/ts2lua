@@ -269,7 +269,7 @@ export class LuaMaker {
       }
     }
     for(let diffClassName of this.diffClassNames) {
-      if(uim[diffClassName] > 0) {
+      if(diffClassName != className && uim[diffClassName] > 0) {
         let importPath: string = './' + this.fileName + '/' + diffClassName;         
         if(imports.indexOf(importPath) < 0) {
           imports.push(importPath);
@@ -277,7 +277,7 @@ export class LuaMaker {
       } 
     }
     for(let diffEnumName of this.diffEnumNames) {
-      if(uim[diffEnumName] > 0) {
+      if(diffEnumName != className && uim[diffEnumName] > 0) {
         let importPath: string = './' + this.fileName + '/' + diffEnumName;         
         if(imports.indexOf(importPath) < 0) {
           imports.push(importPath);
