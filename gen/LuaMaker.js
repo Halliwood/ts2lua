@@ -5,7 +5,7 @@ var util = require("util");
 var path = require("path");
 var LuaMaker = /** @class */ (function () {
     function LuaMaker() {
-        this.noBraceTypes = [typescript_estree_1.AST_NODE_TYPES.MemberExpression, typescript_estree_1.AST_NODE_TYPES.ThisExpression, typescript_estree_1.AST_NODE_TYPES.Identifier, typescript_estree_1.AST_NODE_TYPES.CallExpression, typescript_estree_1.AST_NODE_TYPES.TSAsExpression, typescript_estree_1.AST_NODE_TYPES.TSTypeAssertion];
+        this.noBraceTypes = [typescript_estree_1.AST_NODE_TYPES.MemberExpression, typescript_estree_1.AST_NODE_TYPES.ThisExpression, typescript_estree_1.AST_NODE_TYPES.Identifier, typescript_estree_1.AST_NODE_TYPES.CallExpression, typescript_estree_1.AST_NODE_TYPES.TSAsExpression, typescript_estree_1.AST_NODE_TYPES.TSTypeAssertion, typescript_estree_1.AST_NODE_TYPES.Super];
         // TODO: Typeof's return value may be different between ts and lua
         this.tsType2luaType = {
             'undefined': 'nil',
@@ -26,7 +26,6 @@ var LuaMaker = /** @class */ (function () {
         this.diffClassNames = [];
         this.diffEnumNames = [];
         this.nativeEnumNames = [];
-        this.moduleQueue = [];
         this.hasContinue = false;
         this.inSwitchCase = false;
         this.inStatic = false;
@@ -143,8 +142,9 @@ var LuaMaker = /** @class */ (function () {
         this.funcReplConf = funcReplConf;
         this.regexReplConf = regexReplConf;
     };
-    LuaMaker.prototype.setClassMap = function (classMap, enumMap) {
+    LuaMaker.prototype.setClassMap = function (classMap, moduleMap, enumMap) {
         this.classMap = classMap;
+        this.moduleMap = moduleMap;
         this.enumMap = enumMap;
     };
     LuaMaker.prototype.toLuaBySource = function (ast) {
@@ -190,12 +190,14 @@ var LuaMaker = /** @class */ (function () {
         content = this.formatPop(content);
         if ('xlua' == this.option.style) {
             content = content.replace(/UnityEngine\./g, 'CS.UnityEngine.');
+            // let regex = new RegExp('(?<=[^\w])Game(?=\.)', 'g');
         }
         var imports = this.importMapByClass[className];
         var locals = [];
-        if (hasClass) {
-            imports.push('class');
-        }
+        // if(hasClass) {
+        //   imports.push('Objects = dmc_lua/lua_class');
+        //   locals.push('local Class = Objects.Class');
+        // }
         var uim = this.usedIdMapByClass[className];
         for (var _i = 0, _a = this.importAsts; _i < _a.length; _i++) {
             var ia = _a[_i];
@@ -252,11 +254,20 @@ var LuaMaker = /** @class */ (function () {
                 imports.push(importPath);
             }
         }
-        imports.sort();
+        // imports.sort();
         for (var _h = 0, imports_1 = imports; _h < imports_1.length; _h++) {
             var p = imports_1[_h];
+            var exportVar = void 0;
+            var importMtc = p.match(/(\w+) = (.+)/);
+            if (importMtc) {
+                exportVar = importMtc[1];
+                p = importMtc[2];
+            }
             if (p.indexOf('./') == 0 || p.indexOf('../') == 0) {
                 p = path.relative(this.rootPath, path.join(path.dirname(this.filePath), p)).replace(/\\+/g, '/');
+            }
+            if (exportVar) {
+                outStr += 'local ' + exportVar + ' = ';
             }
             outStr += 'require("' + p + '")\n';
         }
@@ -667,6 +678,9 @@ var LuaMaker = /** @class */ (function () {
     LuaMaker.prototype.codeFromCallExpression = function (ast) {
         ast.callee.__parent = ast;
         var calleeStr = this.codeFromAST(ast.callee);
+        if (calleeStr == 'super') {
+            calleeStr += ':__new__';
+        }
         var str = '';
         var allAgmStr = '';
         for (var i = 0, len = ast.arguments.length; i < len; i++) {
@@ -738,24 +752,23 @@ var LuaMaker = /** @class */ (function () {
         }
         if (this.classPropDefStr) {
             var propDefPos = -1;
-            var superStr = this.className + '.super()';
-            var superStrPos = str.indexOf(superStr);
-            if (superStrPos >= 0) {
-                propDefPos = superStrPos + superStr.length + 1;
+            var superStrMtc = str.match(/super:__new__\(.*\n/);
+            if (superStrMtc) {
+                propDefPos = superStrMtc.index + superStrMtc[0].length;
             }
             else {
-                var ctorStr = 'function ' + this.className + '.prototype:ctor()';
-                var ctorStrPos = str.indexOf(ctorStr);
-                if (ctorStrPos >= 0) {
-                    propDefPos = ctorStrPos + ctorStr.length + 1;
+                var ctorStrMtc = str.match(/:__new__\(.*\)\n/);
+                if (ctorStrMtc) {
+                    propDefPos = ctorStrMtc.index + ctorStrMtc[0].length;
                 }
             }
             if (propDefPos >= 0) {
-                str = str.substr(0, propDefPos) + this.indent(this.classPropDefStr) + '\n' + str.substr(propDefPos);
+                var ctorBody = this.classPropDefStr;
+                str = str.substr(0, propDefPos) + this.indent(ctorBody) + '\n' + str.substr(propDefPos);
             }
             else {
-                str = 'function ' + this.className + '.prototype:ctor()\n' +
-                    this.indent(this.classPropDefStr) +
+                str = 'function ' + this.className + ':__new__(...)\n' +
+                    this.indent('self:superCall(\'__new__\', unpack({...}))\n' + this.classPropDefStr) +
                     '\nend\n' +
                     str;
             }
@@ -763,7 +776,6 @@ var LuaMaker = /** @class */ (function () {
         return str;
     };
     LuaMaker.prototype.codeFromClassDeclaration = function (ast) {
-        var str = '$BaseClass$:subclass("$ClassName$")\n';
         if (ast.typeParameters) {
             // typeParameters?: TSTypeParameterDeclaration;
         }
@@ -783,7 +795,11 @@ var LuaMaker = /** @class */ (function () {
         if (!this.importMapByClass[className]) {
             this.importMapByClass[className] = [];
         }
-        str = str.replace('$ClassName$', className);
+        var str = '';
+        if (!ast.__exported) {
+            str += 'local ';
+        }
+        str += className + ' = newClass({$BaseClass$}, {name = \'' + className + '\'})\n';
         str += this.codeFromClassBody(ast.body);
         if (ast.superClass) {
             str = str.replace('$BaseClass$', this.codeFromAST(ast.superClass));
@@ -805,6 +821,8 @@ var LuaMaker = /** @class */ (function () {
             // Decorator[];
             this.assert(false, ast);
         }
+        str = str.replace(/super:([^\(]+)\(\)/g, "self:superCall('$1')");
+        str = str.replace(/super:([^\(]+)\(/g, "self:superCall('$1',");
         if (this.isDiffClass) {
             // save as another file
             this.diffClassNames.push(className);
@@ -877,6 +895,9 @@ var LuaMaker = /** @class */ (function () {
     };
     LuaMaker.prototype.codeFromExportNamedDeclaration = function (ast) {
         ast.declaration.__exported = true;
+        if (ast.__module) {
+            ast.declaration.__module = ast.__module;
+        }
         return this.codeFromAST(ast.declaration);
     };
     LuaMaker.prototype.codeFromExportSpecifier = function (ast) {
@@ -929,9 +950,9 @@ var LuaMaker = /** @class */ (function () {
         return this.codeFromFunctionExpression(ast);
     };
     LuaMaker.prototype.codeFromFunctionExpression = function (ast) {
-        return this.codeFromFunctionExpressionInternal(null, false, ast);
+        return this.codeFromFunctionExpressionInternal(null, false, null, ast);
     };
-    LuaMaker.prototype.codeFromFunctionExpressionInternal = function (funcName, isStatic, ast) {
+    LuaMaker.prototype.codeFromFunctionExpressionInternal = function (funcName, isStatic, kind, ast) {
         this.inStatic = isStatic;
         var str = '';
         if (!funcName && ast.id) {
@@ -939,32 +960,38 @@ var LuaMaker = /** @class */ (function () {
         }
         if (funcName) {
             if ('constructor' == funcName) {
-                funcName = 'ctor';
+                funcName = '__new__';
+            }
+            else if (ast.__module) {
+                if (!ast.__exported) {
+                    str = 'local ';
+                }
+                else {
+                    funcName = ast.__module + '.' + funcName;
+                }
             }
             if (ast.type == typescript_estree_1.AST_NODE_TYPES.FunctionDeclaration) {
                 // 比如匿名函数
-                str = 'function ' + funcName + '(';
+                str += 'function ' + funcName + '(';
             }
             else {
                 if (this.className) {
                     // 成员函数
+                    var dotOrColon = ':';
                     if (isStatic) {
-                        str = 'function ' + this.className + '.' + funcName + '(';
+                        dotOrColon = '.';
                     }
-                    else {
-                        str = 'function ' + this.className + '.prototype:' + funcName + '(';
+                    if (kind == 'get') {
+                        dotOrColon = '.__getters' + dotOrColon;
                     }
+                    else if (kind == 'set') {
+                        dotOrColon = '.__setters' + dotOrColon;
+                    }
+                    str += 'function ' + this.className + dotOrColon + funcName + '(';
                 }
                 else {
-                    var moduleName = this.moduleQueue[this.moduleQueue.length - 1];
-                    if (moduleName) {
-                        // 模块函数
-                        str = 'function ' + moduleName + ':' + funcName + '(';
-                    }
-                    else {
-                        // 普通函数
-                        str = 'function ' + funcName + '(';
-                    }
+                    // 普通函数
+                    str += 'function ' + funcName + '(';
                 }
             }
         }
@@ -1094,6 +1121,9 @@ var LuaMaker = /** @class */ (function () {
         if (null === ast.value) {
             l = 'nil';
         }
+        else if (ast.__type == 'string' && this.option.strLiteralProcessor) {
+            l = this.option.strLiteralProcessor(l);
+        }
         return l;
     };
     LuaMaker.prototype.codeFromLogicalExpression = function (ast) {
@@ -1149,7 +1179,8 @@ var LuaMaker = /** @class */ (function () {
                 var parent_1 = ast.__parent;
                 if (parent_1 && parent_1.type == typescript_estree_1.AST_NODE_TYPES.CallExpression &&
                     (!this.inStatic || ast.object.type != typescript_estree_1.AST_NODE_TYPES.ThisExpression) &&
-                    (!this.classMap[objStr] || !this.classMap[objStr].funcs[pstr] || !this.classMap[objStr].funcs[pstr].isStatic)) {
+                    (!this.classMap[objStr] || !this.classMap[objStr].funcs[pstr] || !this.classMap[objStr].funcs[pstr].isStatic) &&
+                    (!this.moduleMap[objStr] || !this.moduleMap[objStr].funcs[pstr])) {
                     str += ':';
                 }
                 else {
@@ -1172,7 +1203,7 @@ var LuaMaker = /** @class */ (function () {
         if (ast.value.type == "TSEmptyBodyFunctionExpression") {
             this.assert(false, ast, 'Not support TSEmptyBodyFunctionExpression yet!');
         }
-        return this.codeFromFunctionExpressionInternal(funcName, ast.static, ast.value);
+        return this.codeFromFunctionExpressionInternal(funcName, ast.static, ast.kind, ast.value);
     };
     LuaMaker.prototype.codeFromNewExpression = function (ast) {
         var callee = this.codeFromAST(ast.callee);
@@ -1266,7 +1297,7 @@ var LuaMaker = /** @class */ (function () {
         return '...';
     };
     LuaMaker.prototype.codeFromSuper = function (ast) {
-        return this.className + '.super';
+        return 'super';
     };
     LuaMaker.prototype.codeFromSwitchCase = function (ast) {
         var str = '';
@@ -1540,6 +1571,7 @@ var LuaMaker = /** @class */ (function () {
     LuaMaker.prototype.codeFromTSModuleBlock = function (ast) {
         var str = '';
         for (var i = 0, len = ast.body.length; i < len; i++) {
+            ast.body[i].__module = this.moduleName;
             var bstr = this.codeFromAST(ast.body[i]);
             if (bstr) {
                 if (i > 0) {
@@ -1551,13 +1583,12 @@ var LuaMaker = /** @class */ (function () {
         return str;
     };
     LuaMaker.prototype.codeFromTSModuleDeclaration = function (ast) {
-        var moduleName = this.codeFromAST(ast.id);
-        this.moduleQueue.push(moduleName);
-        var str = moduleName + ' = {}\n';
+        this.moduleName = this.codeFromAST(ast.id);
+        var str = this.moduleName + ' = {}\n';
         if (ast.body) {
-            str += this.indent(this.codeFromAST(ast.body));
+            str += this.codeFromAST(ast.body);
         }
-        this.moduleQueue.pop();
+        this.moduleName = null;
         return str;
     };
     LuaMaker.prototype.codeFromTSInterfaceDeclaration = function (ast) {

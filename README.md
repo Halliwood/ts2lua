@@ -1,5 +1,5 @@
 # ts2lua
-ts2lua是一个将TypeScript代码转换为lua代码的工具。它使用一套简单的[lua面向对象写法](lua/class.lua "class.lua定义")，可以将TypeScipt类翻译成lua代码。
+ts2lua是一个将TypeScript代码转换为lua代码的工具。在使用之前，建议您先阅读[lua-objects](https://github.com/dmccuskey/lua-objects "lua-objects的Github")，它是一个很不错的lua面向对象解决方案，支持多重继承、getter/setter等，ts2lua按照lua-objects的规范来处理TypeScript类。
 
 ## 安装
 ```

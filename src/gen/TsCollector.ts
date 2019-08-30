@@ -19,6 +19,14 @@ export interface TsFuncInfo extends TsInfoBase {
   returnType: TSTypeAnnotation;
 } 
 
+export interface TsModuleInfo extends TsInfoBase {
+  type: AST_NODE_TYPES.TSModuleDeclaration;
+  name: string;
+  properties: { [name: string]: TsPropInfo };
+  funcs: { [name: string]: 1 };
+  classes: { [name: string]: TsClassInfo };
+}
+
 export interface TsClassInfo extends TsInfoBase {
   type: AST_NODE_TYPES.ClassDeclaration;
   name: string;
@@ -39,6 +47,7 @@ export interface TsEnumInfo extends TsInfoBase {
 
 export class TsCollector {
   public classMap: { [name: string]: TsClassInfo } = {};
+  public moduleMap: { [name: string]: TsModuleInfo } = {};
   public enumMap: { [name: string]: TsEnumInfo } = {};
   private moduleName: string = '';
 
@@ -75,12 +84,18 @@ export class TsCollector {
   private processTSModuleBlock(ast: TSModuleBlock) {
     for(let stt of ast.body) {
       this.processAST(stt);
+      if(stt.type == AST_NODE_TYPES.ExportNamedDeclaration && (stt as ExportNamedDeclaration).declaration.type == AST_NODE_TYPES.FunctionDeclaration) {
+        let funcName = ((stt as ExportNamedDeclaration).declaration as FunctionDeclaration).id.name
+        this.moduleMap[this.moduleName].funcs[funcName] = 1;
+      }
     }
   }
 
 
   private processTSModuleDeclaration(ast: TSModuleDeclaration) {
     this.moduleName = this.getId(ast.id);
+    let info: TsModuleInfo = { type: AST_NODE_TYPES.TSModuleDeclaration, name: this.moduleName, properties: {}, funcs: {}, classes: {} };
+    this.moduleMap[this.moduleName] = info;
     this.processAST(ast.body);
     this.moduleName = '';
   }
@@ -101,6 +116,7 @@ export class TsCollector {
     this.classMap[ast.id.name] = info;
     if(this.moduleName) {
       this.classMap[this.moduleName + '.' + ast.id.name] = info;
+      this.moduleMap[this.moduleName].classes[ast.id.name] = info;
     }
   }
 

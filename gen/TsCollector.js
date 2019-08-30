@@ -4,6 +4,7 @@ var ast_node_types_1 = require("@typescript-eslint/typescript-estree/dist/ts-est
 var TsCollector = /** @class */ (function () {
     function TsCollector() {
         this.classMap = {};
+        this.moduleMap = {};
         this.enumMap = {};
         this.moduleName = '';
     }
@@ -39,10 +40,16 @@ var TsCollector = /** @class */ (function () {
         for (var _i = 0, _a = ast.body; _i < _a.length; _i++) {
             var stt = _a[_i];
             this.processAST(stt);
+            if (stt.type == ast_node_types_1.AST_NODE_TYPES.ExportNamedDeclaration && stt.declaration.type == ast_node_types_1.AST_NODE_TYPES.FunctionDeclaration) {
+                var funcName = stt.declaration.id.name;
+                this.moduleMap[this.moduleName].funcs[funcName] = 1;
+            }
         }
     };
     TsCollector.prototype.processTSModuleDeclaration = function (ast) {
         this.moduleName = this.getId(ast.id);
+        var info = { type: ast_node_types_1.AST_NODE_TYPES.TSModuleDeclaration, name: this.moduleName, properties: {}, funcs: {}, classes: {} };
+        this.moduleMap[this.moduleName] = info;
         this.processAST(ast.body);
         this.moduleName = '';
     };
@@ -64,6 +71,7 @@ var TsCollector = /** @class */ (function () {
         this.classMap[ast.id.name] = info;
         if (this.moduleName) {
             this.classMap[this.moduleName + '.' + ast.id.name] = info;
+            this.moduleMap[this.moduleName].classes[ast.id.name] = info;
         }
     };
     TsCollector.prototype.processTSEnumDeclaration = function (ast) {

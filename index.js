@@ -13,7 +13,7 @@ var util = require("util");
 var parser = require("@typescript-eslint/typescript-estree");
 var LuaMaker_1 = require("./gen/LuaMaker");
 var TsCollector_1 = require("./gen/TsCollector");
-var luaFilesToCopy = ['class', 'trycatch', 'date', 'stringutil', 'tableutil'];
+var luaFilesToCopy = ['dmc_lua\\lua_class', 'trycatch', 'date', 'stringutil', 'tableutil'];
 var devMode = false;
 var fileCnt = 0;
 var requireContent = '';
@@ -51,7 +51,7 @@ function translate(tsCode, option) {
     processOption(option);
     var parsed = parser.parse(tsCode);
     tc.collect(parsed);
-    lm.setClassMap(tc.classMap, tc.enumMap);
+    lm.setClassMap(tc.classMap, tc.moduleMap, tc.enumMap);
     var luaCode = lm.toLuaBySource(parsed);
     collectUnknowRegex();
     return luaCode;
@@ -68,7 +68,9 @@ function translateFiles(inputPath, outputPath, option) {
     fs.mkdirSync(outputPath, { recursive: true });
     for (var _i = 0, luaFilesToCopy_1 = luaFilesToCopy; _i < luaFilesToCopy_1.length; _i++) {
         var luaFile = luaFilesToCopy_1[_i];
-        fs.copyFileSync(path.join(__dirname, 'lua', luaFile) + '.lua', path.join(outputPath, luaFile) + opt.ext);
+        var dstPath = path.join(outputPath, luaFile) + opt.ext;
+        fs.mkdirSync(path.parse(dstPath).dir, { recursive: true });
+        fs.copyFileSync(path.join(__dirname, 'lua', luaFile) + '.lua', dstPath);
     }
     inputFolder = inputPath;
     outputFolder = outputPath;
@@ -76,14 +78,14 @@ function translateFiles(inputPath, outputPath, option) {
     var inputStat = fs.statSync(inputPath);
     if (inputStat.isFile()) {
         collectClass(inputPath);
-        lm.setClassMap(tc.classMap, tc.enumMap);
+        lm.setClassMap(tc.classMap, tc.moduleMap, tc.enumMap);
         doTranslateFile(inputPath);
     }
     else {
         console.log('Processing... Please wait.');
         readDir(inputPath, true);
         console.log('Making lua... Please wait.');
-        lm.setClassMap(tc.classMap, tc.enumMap);
+        lm.setClassMap(tc.classMap, tc.moduleMap, tc.enumMap);
         readDir(inputPath, false);
     }
     console.log("\x1B[36m%d\x1B[0m .ts files translated.", fileCnt);

@@ -7,7 +7,7 @@ import { LuaMaker } from './gen/LuaMaker';
 import { TsCollector } from './gen/TsCollector';
 import { Program } from '@typescript-eslint/typescript-estree/dist/ts-estree/ts-estree';
 
-const luaFilesToCopy: string[] = ['class', 'trycatch', 'date', 'stringutil', 'tableutil'];
+const luaFilesToCopy: string[] = ['dmc_lua\\lua_class', 'trycatch', 'date', 'stringutil', 'tableutil'];
 
 const devMode: boolean = false;
 let fileCnt = 0;
@@ -50,7 +50,7 @@ export function translate(tsCode: string, option?: TranslateOption): string {
 
   const parsed = parser.parse(tsCode);
   tc.collect(parsed);
-  lm.setClassMap(tc.classMap, tc.enumMap);
+  lm.setClassMap(tc.classMap, tc.moduleMap, tc.enumMap);
   let luaCode = lm.toLuaBySource(parsed);
   collectUnknowRegex();
   return luaCode;
@@ -67,7 +67,9 @@ export function translateFiles(inputPath: string, outputPath: string, option?: T
   // copy class.lua & trycatch.lua
   fs.mkdirSync(outputPath, { recursive: true });
   for(let luaFile of luaFilesToCopy) {
-    fs.copyFileSync(path.join(__dirname, 'lua', luaFile) + '.lua', path.join(outputPath, luaFile) + opt.ext);
+    let dstPath = path.join(outputPath, luaFile) + opt.ext;
+    fs.mkdirSync(path.parse(dstPath).dir, { recursive: true });    
+    fs.copyFileSync(path.join(__dirname, 'lua', luaFile) + '.lua', dstPath);
   }
 
   inputFolder = inputPath;
@@ -76,13 +78,13 @@ export function translateFiles(inputPath: string, outputPath: string, option?: T
   let inputStat = fs.statSync(inputPath);
   if(inputStat.isFile()) {
     collectClass(inputPath);
-    lm.setClassMap(tc.classMap, tc.enumMap);
+    lm.setClassMap(tc.classMap, tc.moduleMap, tc.enumMap);
     doTranslateFile(inputPath);
   } else {
     console.log('Processing... Please wait.');
     readDir(inputPath, true);
     console.log('Making lua... Please wait.');
-    lm.setClassMap(tc.classMap, tc.enumMap);
+    lm.setClassMap(tc.classMap, tc.moduleMap, tc.enumMap);
     readDir(inputPath, false);
   }
 

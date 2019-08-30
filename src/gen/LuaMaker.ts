@@ -2,12 +2,12 @@ import { ArrayExpression, ArrayPattern, ArrowFunctionExpression, AssignmentExpre
 import { AST_NODE_TYPES } from '@typescript-eslint/typescript-estree';
 import util = require('util');
 import path = require('path');
-import { TsClassInfo, TsEnumInfo } from './TsCollector';
+import { TsClassInfo, TsEnumInfo, TsModuleInfo } from './TsCollector';
 import { TranslateOption } from './TranslateOption';
 import { stringify } from 'querystring';
 
 export class LuaMaker {
-  private readonly noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier, AST_NODE_TYPES.CallExpression, AST_NODE_TYPES.TSAsExpression, AST_NODE_TYPES.TSTypeAssertion];
+  private readonly noBraceTypes = [AST_NODE_TYPES.MemberExpression, AST_NODE_TYPES.ThisExpression, AST_NODE_TYPES.Identifier, AST_NODE_TYPES.CallExpression, AST_NODE_TYPES.TSAsExpression, AST_NODE_TYPES.TSTypeAssertion, AST_NODE_TYPES.Super];
 
   // TODO: Typeof's return value may be different between ts and lua
   private readonly tsType2luaType = {
@@ -143,6 +143,7 @@ export class LuaMaker {
   private isDevMode = false;
   private option: TranslateOption;
   private classMap: { [name: string]: TsClassInfo };
+  private moduleMap: { [name: string]: TsModuleInfo };
   private enumMap: { [name: string]: TsEnumInfo };
   private funcReplConf: {[func: string]: string} = {};
   private regexReplConf: {[regex: string]: string} = {};
@@ -161,7 +162,7 @@ export class LuaMaker {
   private diffClassNames: string[] = [];
   private diffEnumNames: string[] = [];
   private nativeEnumNames: string[] = [];
-  private moduleQueue: string[] = [];
+  private moduleName: string;
   private hasContinue = false;
   private inSwitchCase = false;
   private inStatic = false;
@@ -176,8 +177,9 @@ export class LuaMaker {
     this.regexReplConf = regexReplConf;
   }
 
-  public setClassMap(classMap: { [name: string]: TsClassInfo }, enumMap: { [name: string]: TsEnumInfo }) {
+  public setClassMap(classMap: { [name: string]: TsClassInfo }, moduleMap: { [name: string]: TsModuleInfo }, enumMap: { [name: string]: TsEnumInfo }) {
     this.classMap = classMap;
+    this.moduleMap = moduleMap;
     this.enumMap = enumMap;
   }
 
@@ -229,13 +231,15 @@ export class LuaMaker {
     content = this.formatPop(content);
     if('xlua' == this.option.style) {
       content = content.replace(/UnityEngine\./g, 'CS.UnityEngine.');
+      // let regex = new RegExp('(?<=[^\w])Game(?=\.)', 'g');
     }
 
     let imports: string[] = this.importMapByClass[className];
     let locals: string[] = [];
-    if(hasClass) {
-      imports.push('class');
-    }
+    // if(hasClass) {
+    //   imports.push('Objects = dmc_lua/lua_class');
+    //   locals.push('local Class = Objects.Class');
+    // }
     let uim = this.usedIdMapByClass[className];
     for(let ia of this.importAsts) {
       let importSource = (ia.source as Literal).value as string;
@@ -286,11 +290,20 @@ export class LuaMaker {
         imports.push(importPath);
       }
     } 
-    imports.sort();
+    // imports.sort();
     for(let p of imports) {
+      let exportVar: string;
+      let importMtc = p.match(/(\w+) = (.+)/);
+      if(importMtc) {
+        exportVar = importMtc[1];
+        p = importMtc[2];
+      }
       if(p.indexOf('./') == 0 || p.indexOf('../') == 0) {
         p = path.relative(this.rootPath, path.join(path.dirname(this.filePath), p)).replace(/\\+/g, '/');
       } 
+      if(exportVar) {
+        outStr += 'local ' + exportVar + ' = ';
+      }
       outStr += 'require("' + p + '")\n';
     }
     for(let lcl of locals) {
@@ -795,6 +808,9 @@ export class LuaMaker {
   private codeFromCallExpression(ast: CallExpression): string {
     (ast.callee as any).__parent = ast;
     let calleeStr = this.codeFromAST(ast.callee);
+    if(calleeStr == 'super') {
+      calleeStr += ':__new__';
+    }
     let str = '';
     let allAgmStr = '';
     for (let i = 0, len = ast.arguments.length; i < len; i++) {
@@ -864,23 +880,22 @@ export class LuaMaker {
     }
     if(this.classPropDefStr) {
       let propDefPos = -1;
-      let superStr = this.className + '.super()';
-      let superStrPos = str.indexOf(superStr);
-      if(superStrPos >= 0) {
-        propDefPos = superStrPos + superStr.length + 1;
+      let superStrMtc = str.match(/super:__new__\(.*\n/);
+      if(superStrMtc) {
+        propDefPos = superStrMtc.index + superStrMtc[0].length;
       } else {
-        let ctorStr = 'function ' + this.className + '.prototype:ctor()';
-        let ctorStrPos = str.indexOf(ctorStr);
-        if(ctorStrPos >= 0) {
-          propDefPos = ctorStrPos + ctorStr.length + 1;
+        let ctorStrMtc = str.match(/:__new__\(.*\)\n/);
+        if(ctorStrMtc) {
+          propDefPos = ctorStrMtc.index + ctorStrMtc[0].length;
         }
       }
 
       if(propDefPos >= 0) {
-        str = str.substr(0, propDefPos) + this.indent(this.classPropDefStr) + '\n' + str.substr(propDefPos);
+        let ctorBody = this.classPropDefStr;
+        str = str.substr(0, propDefPos) + this.indent(ctorBody) + '\n' + str.substr(propDefPos);
       } else {
-        str = 'function ' + this.className + '.prototype:ctor()\n' + 
-        this.indent(this.classPropDefStr) + 
+        str = 'function ' + this.className + ':__new__(...)\n' + 
+        this.indent('self:superCall(\'__new__\', unpack({...}))\n' + this.classPropDefStr) + 
         '\nend\n' + 
         str;
       }
@@ -889,7 +904,6 @@ export class LuaMaker {
   }
   
   private codeFromClassDeclaration(ast: ClassDeclaration): string {
-    let str = '$BaseClass$:subclass("$ClassName$")\n';
     if (ast.typeParameters) {
       // typeParameters?: TSTypeParameterDeclaration;
     }
@@ -909,7 +923,13 @@ export class LuaMaker {
     if(!this.importMapByClass[className]) {
       this.importMapByClass[className] = [];
     }
-    str = str.replace('$ClassName$', className);
+
+    let str = '';
+    if(!(ast as any).__exported) {
+      str += 'local ';
+    }
+    str += className + ' = newClass({$BaseClass$}, {name = \'' + className + '\'})\n';
+
     str += this.codeFromClassBody(ast.body);
     if (ast.superClass) {
       str = str.replace('$BaseClass$', this.codeFromAST(ast.superClass));
@@ -930,6 +950,9 @@ export class LuaMaker {
       // Decorator[];
       this.assert(false, ast);
     }
+
+    str = str.replace(/super:([^\(]+)\(\)/g, "self:superCall('$1')");
+    str = str.replace(/super:([^\(]+)\(/g, "self:superCall('$1',");
 
     if(this.isDiffClass) {
       // save as another file
@@ -1013,6 +1036,9 @@ export class LuaMaker {
   
   private codeFromExportNamedDeclaration(ast: ExportNamedDeclaration): string {
     (ast.declaration as any).__exported = true;
+    if((ast as any).__module) {
+      (ast.declaration as any).__module = (ast as any).__module;
+    }
     return this.codeFromAST(ast.declaration);
   }
   
@@ -1072,10 +1098,10 @@ export class LuaMaker {
   }
   
   private codeFromFunctionExpression(ast: FunctionExpression): string {
-    return this.codeFromFunctionExpressionInternal(null, false, ast);
+    return this.codeFromFunctionExpressionInternal(null, false, null, ast);
   }
   
-  private codeFromFunctionExpressionInternal(funcName: string, isStatic: boolean, ast: FunctionExpression): string {
+  private codeFromFunctionExpressionInternal(funcName: string, isStatic: boolean, kind: string, ast: FunctionExpression): string {
     this.inStatic = isStatic;
     let str = '';
     if(!funcName && ast.id) {
@@ -1083,28 +1109,33 @@ export class LuaMaker {
     }
     if (funcName) {
       if('constructor' == funcName) {
-        funcName = 'ctor';
+        funcName = '__new__';
+      } else if((ast as any).__module) {        
+        if(!(ast as any).__exported) {
+          str = 'local ';
+        } else {
+          funcName = (ast as any).__module + '.' + funcName;
+        }
       }
       if((ast as any).type == AST_NODE_TYPES.FunctionDeclaration) {
         // 比如匿名函数
-        str = 'function ' + funcName + '(';
+        str += 'function ' + funcName + '(';
       } else {
         if (this.className) {
           // 成员函数
+          let dotOrColon = ':';
           if(isStatic) {
-            str = 'function ' + this.className + '.' + funcName + '(';
-          } else {
-            str = 'function ' + this.className + '.prototype:' + funcName + '(';
-          }
+            dotOrColon = '.';
+          } 
+          if(kind == 'get') {
+            dotOrColon = '.__getters' + dotOrColon;
+          } else if(kind == 'set') {
+            dotOrColon = '.__setters' + dotOrColon;
+          } 
+          str += 'function ' + this.className + dotOrColon + funcName + '(';
         } else {
-          let moduleName = this.moduleQueue[this.moduleQueue.length - 1];
-          if(moduleName) {
-            // 模块函数
-            str = 'function ' + moduleName + ':' + funcName + '(';
-          } else {
-            // 普通函数
-            str = 'function ' + funcName + '(';
-          }
+          // 普通函数
+          str += 'function ' + funcName + '(';
         }
       }
     } else {
@@ -1239,6 +1270,8 @@ export class LuaMaker {
     let l = ast.raw;
     if(null === ast.value) {
       l = 'nil';
+    } else if((ast as any).__type == 'string' && this.option.strLiteralProcessor) {
+      l = this.option.strLiteralProcessor(l);
     }
     return l;
   }
@@ -1292,7 +1325,8 @@ export class LuaMaker {
         let parent = (ast as any).__parent;
         if(parent && parent.type == AST_NODE_TYPES.CallExpression && 
           (!this.inStatic || ast.object.type != AST_NODE_TYPES.ThisExpression) && 
-          (!this.classMap[objStr] || !this.classMap[objStr].funcs[pstr] || !this.classMap[objStr].funcs[pstr].isStatic)) {
+          (!this.classMap[objStr] || !this.classMap[objStr].funcs[pstr] || !this.classMap[objStr].funcs[pstr].isStatic) && 
+          (!this.moduleMap[objStr] || !this.moduleMap[objStr].funcs[pstr])) {
           str += ':';
         } else {
           str += '.';
@@ -1316,7 +1350,7 @@ export class LuaMaker {
     if(ast.value.type == "TSEmptyBodyFunctionExpression") {
       this.assert(false, ast, 'Not support TSEmptyBodyFunctionExpression yet!');
     }
-    return this.codeFromFunctionExpressionInternal(funcName, ast.static, ast.value as FunctionExpression);
+    return this.codeFromFunctionExpressionInternal(funcName, ast.static, ast.kind, ast.value as FunctionExpression);
   }
   
   private codeFromNewExpression(ast: NewExpression): string {
@@ -1419,7 +1453,7 @@ export class LuaMaker {
   }
   
   private codeFromSuper(ast: Super): string {
-    return this.className + '.super';
+    return 'super';
   }
   
   private codeFromSwitchCase(ast: SwitchCase): string {
@@ -1701,6 +1735,7 @@ export class LuaMaker {
   private codeFromTSModuleBlock(ast: TSModuleBlock): string {
     let str = '';
     for(let i = 0, len = ast.body.length; i < len; i++) {
+      (ast.body[i] as any).__module = this.moduleName;
       let bstr = this.codeFromAST(ast.body[i]);
       if(bstr) {
         if(i > 0) {
@@ -1713,13 +1748,12 @@ export class LuaMaker {
   }
   
   private codeFromTSModuleDeclaration(ast: TSModuleDeclaration): string {
-    let moduleName = this.codeFromAST(ast.id);
-    this.moduleQueue.push(moduleName);
-    let str = moduleName + ' = {}\n';
+    this.moduleName = this.codeFromAST(ast.id);
+    let str = this.moduleName + ' = {}\n';
     if(ast.body) {
-      str += this.indent(this.codeFromAST(ast.body));
+      str += this.codeFromAST(ast.body);
     }
-    this.moduleQueue.pop();
+    this.moduleName = null;
     return str;
   }
   

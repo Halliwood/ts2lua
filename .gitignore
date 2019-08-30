@@ -3,8 +3,11 @@
 smartCode.js
 **/robot/
 **/lua/*.lua
-!**/lua/class.lua
 !**/lua/date.lua
 !**/lua/trycatch.lua
 !**/lua/stringutil.lua
 !**/lua/tableutil.lua
+**/lua/dmc_lua/*.lua
+**/lua/dmc_lua/lib/bit/*.lua
+**/lua/dmc_lua/lua_bytearray/*.lua
+!**/lua/dmc_lua/lua_class.lua

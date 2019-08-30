@@ -14,5 +14,7 @@ export interface TranslateOption {
   /**输出未识别的正则表达式的txt文件路径，默认不输出 */
   traceUnknowRegex?: string,
   /**是否忽略代码块中单纯的成员表达式，默认为true */
-  ignoreNoUsedExp?: boolean
+  ignoreNoUsedExp?: boolean, 
+  /**字符串处理函数 */
+  strLiteralProcessor?: (str: string) => string | null
 }
