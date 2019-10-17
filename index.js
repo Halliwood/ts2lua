@@ -65,11 +65,14 @@ exports.translate = translate;
 function translateFiles(inputPath, outputPath, option) {
     processOption(option);
     // copy class.lua & trycatch.lua
-    fs.mkdirSync(outputPath, { recursive: true });
+    if (!fs.existsSync(outputPath))
+        fs.mkdirSync(outputPath, { recursive: true });
     for (var _i = 0, luaFilesToCopy_1 = luaFilesToCopy; _i < luaFilesToCopy_1.length; _i++) {
         var luaFile = luaFilesToCopy_1[_i];
         var dstPath = path.join(outputPath, luaFile) + opt.ext;
-        fs.mkdirSync(path.parse(dstPath).dir, { recursive: true });
+        var dstPathDir = path.parse(dstPath).dir;
+        if (!fs.existsSync(dstPathDir))
+            fs.mkdirSync(dstPathDir, { recursive: true });
         fs.copyFileSync(path.join(__dirname, 'lua', luaFile) + '.lua', dstPath);
     }
     inputFolder = inputPath;
@@ -134,7 +137,8 @@ function doTranslateFile(filePath) {
     var luaContent = lm.toLuaByFile(parsed, filePath, inputFolder);
     if (luaContent) {
         var luaFilePath = outFilePath.replace(/\.ts$/, opt.ext);
-        fs.mkdirSync(outFilePP.dir, { recursive: true });
+        if (!fs.existsSync(outFilePP.dir))
+            fs.mkdirSync(outFilePP.dir, { recursive: true });
         fs.writeFileSync(luaFilePath, luaContent);
     }
     var dotIndex = outFilePP.name.indexOf('.');
@@ -143,7 +147,8 @@ function doTranslateFile(filePath) {
         var classContent = lm.classContentMap[className];
         var classFilePath = diffDir + '\\' + className + opt.ext;
         var fileFolder = classFilePath.substr(0, classFilePath.lastIndexOf('\\'));
-        fs.mkdirSync(fileFolder, { recursive: true });
+        if (!fs.existsSync(fileFolder))
+            fs.mkdirSync(fileFolder, { recursive: true });
         fs.writeFileSync(classFilePath, classContent);
     }
     fileCnt++;
