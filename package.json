@@ -7,7 +7,7 @@
   "scripts": {
     "test": "tsc && node index.js",
     "build": "tsc",
-    "release": "tsc && npm config set registry=https://registry.npmjs.org && npm publish && npm config set registry=https://registry.npm.taobao.org/"
+    "release": "npm config set registry=https://registry.npmjs.org && npm version patch && npm publish --access=public"
   },
   "repository": {
     "type": "git",
